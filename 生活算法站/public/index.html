@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>生活算法站 · 数学运算讲方法</title>
+  <link rel="stylesheet" href="/style.css?v=stick1" />
+  <script src="/rules.js" defer></script>
+  <script type="module" src="/app.mjs"></script>
+</head>
+<body class="game">
+<header id="hud" class="hud" hidden>
+  <button id="hud-avatar" class="hud-avatar" type="button" aria-label="换角色"><img id="hud-avatar-img" alt="" width="30" height="40"></button>
+  <span id="identity" class="hud-id"></span>
+  <ol id="hud-progress" class="hud-progress" aria-label="各站进度"></ol>
+  <b id="points" class="hud-points">积分 0</b>
+  <b id="hud-stars" class="hud-stars" title="星级">☆☆☆</b>
+  <small id="sync-status" class="hud-sync" role="status"></small>
+  <span class="hud-right">
+    <button id="sound" class="hud-btn" type="button" aria-label="音效（默认关闭）">🔇</button>
+    <button id="help" class="hud-btn help" type="button" aria-label="帮助">?</button>
+    <button id="menu-btn" class="hud-btn" type="button" aria-label="菜单">☰</button>
+  </span>
+  <div id="menu" class="menu" hidden>
+    <button id="fresh" type="button">本站重新开始</button>
+    <button id="switch" type="button">切换学生</button>
+  </div>
+</header>
+<div id="test-tools" class="test-tools" hidden><b>教师测试 · 不写入班级数据</b><button id="test-answer" type="button">本步参考答案</button><button id="test-quiz" type="button">试做20题</button><span id="test-answer-text" class="test-answer-text"></span></div>
+
+<section id="login" class="screen login-screen">
+  <div id="login-bg" class="login-bg" aria-hidden="true"></div>
+  <form id="login-form" class="login-card" autocomplete="off">
+    <p class="eyebrow">五年级 · 第5课 数学运算讲方法</p>
+    <h1>生活算法站</h1>
+    <p class="big-q">我写的计算步骤，同桌照着做，<br>换一个数也能算对吗？</p>
+    <div class="login-step"><h2>① 选班级</h2><div id="class-tiles" class="class-tiles" role="group"></div></div>
+    <div class="login-step" id="step-name" hidden>
+      <h2>② 点你的名字</h2>
+      <input id="search" class="search" placeholder="输入名字里的字快速查找" aria-label="查找姓名" />
+      <div id="name-grid" class="name-grid" role="group"></div>
+      <button id="manual-toggle" type="button" class="link-btn">名单里没有我</button>
+      <div id="manual-box" class="manual-box" hidden><input id="manual-name" maxlength="30" placeholder="写下你的名字" /></div>
+    </div>
+    <div id="same-name" class="same-name" hidden></div>
+    <p id="identity-confirm" class="confirm-line"></p>
+    <button id="login-submit" type="submit" class="go-btn" hidden>确认身份，开始探索 →</button>
+    <p id="login-error" class="error" role="alert"></p>
+  </form>
+</section>
+
+<section id="map" class="screen map-screen" hidden>
+  <div id="map-world" class="map-world"></div>
+  <div class="map-guide"><div id="map-guide-svg" class="xiaodi-mini"></div><p id="map-say" class="bubble-text"></p></div>
+</section>
+
+<section id="level" class="screen level-screen" hidden>
+  <div class="level-bar">
+    <button id="to-map" type="button" class="ghost-btn">← 地图</button>
+    <div class="level-name"><small id="chapter"></small><b id="stage-title"></b></div>
+    <ol id="parts" class="steps" aria-label="本站证据点"></ol>
+  </div>
+  <div id="level-main" class="level-main">
+    <div id="scene" class="scene"></div>
+  </div>
+  <div class="guide-bar">
+    <img id="actor" class="actor" alt="" width="48" height="64" />
+    <div class="bubble"><div class="bubble-body"><b id="say-main"></b><span id="say-sub"></span></div></div>
+  </div>
+</section>
+
+<section id="quiz-page" class="screen paper-screen" hidden></section>
+
+<div id="coach" class="coach" hidden aria-hidden="true"><span class="coach-text"></span><i class="coach-hand"></i></div>
+<div id="spot" class="spot" hidden></div>
+<div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

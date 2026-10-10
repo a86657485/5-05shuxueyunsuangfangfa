@@ -1,0 +1,16 @@
+# 敏感与课堂数据
+roster.json
+runtime/
+*.sqlite
+*.sqlite*
+课堂数据库/
+# 依赖与系统垃圾
+node_modules/
+.DS_Store
+# 教材 PDF（体积大，不随仓库分发）
+*.pdf
+# 其他本地/备份
+_备份_*/
+backups/
+.env
+.env.*
