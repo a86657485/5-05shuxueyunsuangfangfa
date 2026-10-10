@@ -16,6 +16,10 @@
 
 https://github.com/a86657485/5-05shuxueyunsuangfangfa
 
+## 本地更新
+
+在本课文件夹执行 `git pull` 即可与 GitHub 同步（`roster.json`、教材 PDF、`runtime/`、`_备份_*` 等已在 `.gitignore`，拉取不会删本地这些文件）。
+
 ## 快速开始
 
 见 [生活算法站/README.md](生活算法站/README.md)。需要 Node.js ≥ 22.13；首次可将 `roster.example.json` 复制为 `roster.json` 试用虚构名单。
