@@ -2,21 +2,24 @@
  * 焦点引导：任何时刻只突出一个“当前主要操作”（.cta），旁边贴一句话提示和指示手。
  * 求助时用聚光灯压暗其他区域几秒。动画尊重“减少动态效果”。
  */
-let current = null, tipText = '', raf = 0;
+let current = null, tipText = '', raf = 0, neutral = false;
 const $ = id => document.getElementById(id);
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 function host(el) {
+  // 候选答案只定位整组，不把第一个选项误示为推荐答案。
+  if (el?.matches('button.opt')) return el.closest('.q, .ipo-slot, .seg, .shape-pick, .fault-pick, .chips-row, .chips-col') || el.parentElement;
   // 滑块等表单控件不能显示伪元素光圈，把高亮放在它的外框上
   if (el && ['INPUT', 'SELECT'].includes(el.tagName)) return el.closest('.ctl') || el.parentElement;
   return el;
 }
 export function setFocus(el, tip = '') {
+  neutral = !!el?.matches('button.opt');
   const h = host(el), prev = current;
-  document.querySelectorAll('.cta').forEach(n => { if (n !== h) n.classList.remove('cta'); });
+  document.querySelectorAll('.cta').forEach(n => { if (neutral || n !== h) n.classList.remove('cta'); });
   current = h && h.isConnected && !h.closest('[hidden]') ? h : null;
   tipText = current ? tip : '';
   if (current) {
-    current.classList.add('cta'); current.dataset.ctaTip = tip;
+    if (!neutral) { current.classList.add('cta'); current.dataset.ctaTip = tip; }
     if (current !== prev) {
       const r = current.getBoundingClientRect(), bar = document.querySelector('.level-screen:not([hidden]) .guide-bar');
       const limit = bar && !bar.contains(current) && getComputedStyle(bar).position === 'sticky' ? bar.getBoundingClientRect().top : innerHeight;
@@ -57,7 +60,7 @@ export function place() {
     for (const c of candidates) { const k = clamp(c), v = cost(k) + (fits(c) ? 0 : 5000); if (v < bestCost - 1) { best = k; bestCost = v; } if (v === 0) break; }
     let [x, y, side] = best;
     coach.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
-    coach.className = 'coach ' + side;
+    coach.className = 'coach ' + side + (neutral ? ' neutral' : '');
     const hand = coach.querySelector('.coach-hand');
     hand.style.left = side === 'above' || side === 'below' ? Math.max(8, Math.min(cw - 30, r.left + r.width / 2 - x - 14)) + 'px' : '';
   });

@@ -7,6 +7,7 @@ import { api, queueEvent, flushQueue } from './sync.mjs';
 import { setFocus, spotlight, place as placeCoach } from './focus.mjs';
 import { sound } from './sfx.mjs';
 import { mapBackground, places, sprite, pickCharacter, guideSvg, CHARACTERS, mountRpg, paintLoginPreview } from './world.mjs';
+import { STORY, openStory } from './story.mjs';
 
 const R = globalThis.LessonRules;
 const $ = id => document.getElementById(id);
@@ -20,6 +21,14 @@ let character = 'maleAdventurer', avatarAt = 'temp';
 let ui = {}, hintLevel = 0, exam = null, quizAnswers = {}, quizResult = null;
 let login = { classId: '', id: '', manual: false }, roster = [];
 let rpg = null;
+const showStory = (chapter, once = false) => openStory(chapter, { student: state.student, round: state.round, once });
+
+async function enterCampus() {
+  show('map');
+  setFocus(null);
+  await showStory('intro', true);
+  await renderMap();
+}
 
 const toast = msg => { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 2800); };
 const uid = () => crypto.randomUUID();
@@ -197,7 +206,7 @@ async function doLogin() {
     else state = await api('/api/login', { method: 'POST', body: login.manual ? { classId: login.classId, name: chosenName() } : { classId: login.classId, id: login.id } });
     character = pickCharacter(state.student.id);
     sound.play('good');
-    show('map'); renderMap();
+    await enterCampus();
   } catch (e) {
     if (e.status === 409 && e.data?.choices) {
       $('same-name').hidden = false;
@@ -220,8 +229,9 @@ async function renderMap() {
   const world = $('map-world');
   $('map-guide-svg').innerHTML = guideSvg(56);
   const target = nextPlace();
+  $('mission-status').textContent = awarded(R.requiredIds.at(-1)) ? STORY.complete.task : STORY[target].task;
   $('map-say').textContent = awarded(R.requiredIds.at(-1))
-    ? '主线四站完成！走到校门「出门条」做20题；想多练可以去「公式墙」选做。'
+    ? '体验指南四部分准备好了！到校门「出门条」做20题，检查换个输入是否仍会用。公式墙可以选做。'
     : `走到「${places[target].name}」：${places[target].label}。方向键或摇杆移动，靠近后按空格或点「对话」。`;
   if (rpg) { try { rpg.destroy(); } catch {} rpg = null; }
   rpg = await mountRpg(world, {
@@ -256,11 +266,14 @@ async function enterPlace(id) {
   sound.play('tap');
   avatarAt = id;
   if (rpg) { try { rpg.destroy(); } catch {} rpg = null; }
-  if (id === 'quiz') { show('quiz'); renderQuiz(); return; }
+  if (id === 'quiz') { show('quiz'); setFocus(null); await showStory('quiz', true); renderQuiz(); return; }
   stage = id;
   await bumpVisit(id);
   const sum = summaryOf(id);
   partIdx = sum.cleared ? 0 : Math.max(0, R.stageOf(id).parts.findIndex(p => p.id === sum.currentPart));
+  show('level');
+  setFocus(null);
+  if (!sum.cleared) await showStory(id, true);
   startPart(sum.cleared ? 'summary' : null);
 }
 function startPart(special) {
@@ -354,6 +367,7 @@ function renderLevel(special) {
   $('scene').innerHTML = `<div class="part-card" id="card">
     <div class="part-head"><span class="learn">本步要学会：<b>${esc(info.learn)}</b></span>${targetChips(part.targets)}
       <span class="stars" title="本站星级">${esc(sum.starGlyphs || R.starGlyphs(sum.stars))}</span></div>
+    <div class="stage-mission"><span>${esc(STORY[stage].task)}</span><button type="button" class="ghost-btn" id="stage-story">重看任务</button></div>
     ${guideOn ? `<div class="teach-guide" id="teachGuide"><b>教学引导</b>（第 ${sum.visits} 次进站）
       <p>${esc((info.scaffold && info.scaffold[0]) || '按分步提示来，目标先拿到 2 星通关。')}</p>
       ${info.example ? `<p class="example-line">${esc(info.example)}</p>` : ''}
@@ -361,6 +375,7 @@ function renderLevel(special) {
     <div id="body" class="part-body"></div>
     <div id="fb" class="feedback" role="status"></div>
   </div>`;
+  $('stage-story').onclick = () => showStory(stage);
   $('actor').src = sprite(character, 'think');
   if (guideOn) say('教学引导已打开', '分步提示更清楚，先争取 ★★☆ 通关');
   else say('先自己想一想', '卡住再点右上角“?”');
@@ -417,6 +432,7 @@ function renderStageSummary() {
     <img src="${sprite(character, cleared ? 'cheer1' : 'think')}" alt="" width="72" height="96">
     <div class="star-burst" aria-label="本站${sum.stars}星">${esc(glyphs)}</div>
     <h2>${esc(meta.name)} · ${cleared ? '通关' : '尚未通关'}</h2>
+    ${cleared ? `<div class="story-outcome" id="story-outcome"><b>体验指南更新了</b><p>${esc(STORY[stage].outcome || STORY[stage].task)}</p></div>` : ''}
     <ul class="star-rows">${rows.map(([g, t, ok]) => `<li class="${ok ? 'got' : ''}"><b>${g}</b><span>${esc(t)}</span></li>`).join('')}</ul>
     ${cleared
       ? `<p class="note">本站收获（+${meta.points} 积分，只记一次；重玩不扣分）</p>
@@ -437,6 +453,7 @@ function renderStageSummary() {
     $('replayStage').onclick = () => { partIdx = 0; startPart(); };
     setFocus($('backMap'), '去下一站');
     say('通关啦！', `${glyphs} · 积分只记一次`);
+    if (stage === R.requiredIds.at(-1) && R.requiredIds.every(awarded)) showStory('complete', true);
   } else {
     $('keepTrying').onclick = () => {
       const idx = Math.max(0, meta.parts.findIndex(p => p.id === sum.currentPart));
@@ -903,6 +920,7 @@ function renderQuizResult() {
 $('to-map').onclick = () => { tryLeaveToMap(); };
 $('menu-btn').onclick = () => { $('menu').hidden = !$('menu').hidden; };
 $('sound').onclick = () => { sound.toggle(); renderHud(); sound.play('tap'); };
+$('story-replay').onclick = () => { if (state) showStory(screen === 'level' ? stage : screen === 'quiz' ? 'quiz' : 'intro'); };
 $('help').onclick = () => {
   if (screen !== 'level' || !PARTS[stage + '.' + curPart()?.id]) { spotlight(2200); return; }
   hintLevel = Math.min(3, hintLevel + 1);
@@ -937,10 +955,10 @@ async function boot() {
   setupLogin();
   if (mode === 'test') {
     state = { student: { id: 'teacher-test', classId: '501', name: '教师测试' }, round: 'r1', records: {}, awards: [], points: 0, quizAttempts: [] };
-    show('map'); renderMap(); return;
+    await enterCampus(); return;
   }
   if (mode === 'student') {
-    try { state = await api('/api/me'); character = pickCharacter(state.student.id); show('map'); renderMap(); }
+    try { state = await api('/api/me'); character = pickCharacter(state.student.id); await enterCampus(); }
     catch { show('login'); }
     setInterval(() => flushQueue().then(n => { if (n === 0) setSync('已补传完成'); }).catch(() => {}), 8000);
   } else show('login');

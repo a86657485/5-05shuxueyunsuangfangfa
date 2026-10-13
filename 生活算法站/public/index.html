@@ -4,7 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>生活算法站 · 数学运算讲方法</title>
-  <link rel="stylesheet" href="/style.css?v=stick1" />
+  <link rel="stylesheet" href="/style.css?v=story1" />
+  <link rel="stylesheet" href="/story.css" />
   <script src="/rules.js" defer></script>
   <script type="module" src="/app.mjs"></script>
 </head>
@@ -17,6 +18,7 @@
   <b id="hud-stars" class="hud-stars" title="星级">☆☆☆</b>
   <small id="sync-status" class="hud-sync" role="status"></small>
   <span class="hud-right">
+    <button id="story-replay" class="hud-btn" type="button" aria-label="重看任务剧情" title="重看任务剧情">▤</button>
     <button id="sound" class="hud-btn" type="button" aria-label="音效（默认关闭）">🔇</button>
     <button id="help" class="hud-btn help" type="button" aria-label="帮助">?</button>
     <button id="menu-btn" class="hud-btn" type="button" aria-label="菜单">☰</button>
@@ -33,7 +35,7 @@
   <form id="login-form" class="login-card" autocomplete="off">
     <p class="eyebrow">五年级 · 第5课 数学运算讲方法</p>
     <h1>生活算法站</h1>
-    <p class="big-q">我写的计算步骤，同桌照着做，<br>换一个数也能算对吗？</p>
+    <p class="big-q">友好学校的伙伴要来啦！<br>一起准备能照着做的校园体验指南。</p>
     <div class="login-step"><h2>① 选班级</h2><div id="class-tiles" class="class-tiles" role="group"></div></div>
     <div class="login-step" id="step-name" hidden>
       <h2>② 点你的名字</h2>
@@ -51,6 +53,7 @@
 
 <section id="map" class="screen map-screen" hidden>
   <div id="map-world" class="map-world"></div>
+  <div class="mission-strip"><b>校园开放日 · 接待志愿者</b><p id="mission-status"></p></div>
   <div class="map-guide"><div id="map-guide-svg" class="xiaodi-mini"></div><p id="map-say" class="bubble-text"></p></div>
 </section>
 

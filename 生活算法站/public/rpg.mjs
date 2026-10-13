@@ -498,6 +498,7 @@ export async function mountRpg(host, opts) {
   }
 
   function interact() {
+    if (document.body.classList.contains('story-open')) return;
     if (!nearId) return;
     const meta = opts.getMeta?.(nearId) || { open: true };
     if (!meta.open) return;
@@ -508,7 +509,9 @@ export async function mountRpg(host, opts) {
     if (!running) return;
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    const [dx, dy] = inputVec();
+    const storyOpen = document.body.classList.contains('story-open');
+    if (storyOpen) keys.clear();
+    const [dx, dy] = storyOpen ? [0, 0] : inputVec();
     tryMove(dx, dy, dt);
     updateNear();
     draw();
@@ -518,6 +521,7 @@ export async function mountRpg(host, opts) {
 
   const onKey = e => {
     if (!running) return;
+    if (document.body.classList.contains('story-open')) { keys.clear(); return; }
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Spacebar'].includes(e.key) || /^[wasdWASD]$/.test(e.key)) {
       e.preventDefault();
     }
