@@ -31,7 +31,11 @@ async function enterCampus() {
 }
 
 const toast = msg => { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 2800); };
-const uid = () => crypto.randomUUID();
+// crypto.randomUUID 仅在安全上下文(HTTPS/localhost)可用；机房用局域网 http 访问时不存在，
+// 需回退到 getRandomValues（非安全上下文也可用），否则提交会因异常静默失败。
+const uid = () => (typeof crypto.randomUUID === 'function'
+  ? crypto.randomUUID()
+  : ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)));
 const shuffle = a => { const x = a.slice(); for (let i = x.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [x[i], x[j]] = [x[j], x[i]]; } return x; };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const wait = ms => new Promise(r => setTimeout(r, reduced() ? 0 : ms));
