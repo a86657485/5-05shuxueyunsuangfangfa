@@ -930,7 +930,8 @@ function renderQuizResult() {
 
 /* ---------- 奖励小游戏（课堂检测 80 分以上解锁） ---------- */
 function enterReward() {
-  if (!rewardUnlocked(state?.quizAttempts)) return toast(`课堂检测满 ${UNLOCK_SCORE} 分才能进入奖励游戏`);
+  // 教师测试（/test、/demo）免解锁，便于课前预览；学生端必须达标
+  if (!isLocal && !rewardUnlocked(state?.quizAttempts)) return toast(`课堂检测满 ${UNLOCK_SCORE} 分才能进入奖励游戏`);
   show('reward');
   openReward($('reward'), { onExit: () => { show('map'); renderMap(); } });
 }
@@ -975,6 +976,8 @@ async function boot() {
   setupLogin();
   if (mode === 'test') {
     state = { student: { id: 'teacher-test', classId: '501', name: '教师测试' }, round: 'r1', records: {}, awards: [], points: 0, quizAttempts: [] };
+    // /test?game=1 直达奖励游戏，便于教师课前预览
+    if (new URLSearchParams(location.search).has('game')) { enterReward(); return; }
     await enterCampus(); return;
   }
   if (mode === 'student') {
