@@ -144,6 +144,7 @@ export function openReward(root, { onExit = () => {} } = {}) {
     if (g.score > prev) saveBest(g.score);
     const rank = rankOf(g.score);
     q('#rw-over').hidden = false;
+    q('#rw-over').scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
     q('#rw-over-title').textContent = why;
     q('#rw-rank').textContent = rank.key;
     q('#rw-rank-text').textContent = rank.text;

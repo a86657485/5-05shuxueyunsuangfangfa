@@ -1,6 +1,6 @@
 /* 算力工厂：课堂检测 80 分以上解锁的奖励小游戏 */
-.reward-screen{overflow:auto;padding:14px 14px 28px}
-.rw-wrap{max-width:920px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.reward-screen{overflow:auto;padding:14px 14px 28px;display:flex;flex-direction:column}
+.rw-wrap{max-width:920px;margin:auto;display:flex;flex-direction:column;gap:12px;width:100%}
 .rw-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .rw-title{margin:0;font-size:22px;letter-spacing:.04em}
 .rw-title small{font-size:12px;color:var(--muted);font-weight:500;margin-left:8px}
