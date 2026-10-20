@@ -8,6 +8,8 @@ import { setFocus, spotlight, place as placeCoach } from './focus.mjs';
 import { sound } from './sfx.mjs';
 import { mapBackground, places, sprite, pickCharacter, guideSvg, CHARACTERS, mountRpg, paintLoginPreview } from './world.mjs';
 import { STORY, openStory } from './story.mjs';
+import { openReward } from './reward.mjs';
+import { rewardUnlocked, UNLOCK_SCORE } from './reward-rules.mjs';
 
 const R = globalThis.LessonRules;
 const $ = id => document.getElementById(id);
@@ -101,7 +103,7 @@ async function submitPart(record) {
 /* ---------- 屏幕与 HUD ---------- */
 function show(id) {
   screen = id;
-  for (const s of ['login', 'map', 'level', 'quiz-page']) { const el = $(s); if (el) el.hidden = s !== (id === 'quiz' ? 'quiz-page' : id); }
+  for (const s of ['login', 'map', 'level', 'quiz-page', 'reward']) { const el = $(s); if (el) el.hidden = s !== (id === 'quiz' ? 'quiz-page' : id); }
   $('hud').hidden = id === 'login';
   $('menu').hidden = true;
   renderHud();
@@ -122,6 +124,8 @@ function renderHud() {
       hs.title = '各站星级合计';
     }
   }
+  const rb = $('reward-btn');
+  if (rb) rb.hidden = !rewardUnlocked(state.quizAttempts);
   $('hud-avatar-img').src = sprite(character, 'idle');
   $('hud-progress').innerHTML = PLACE_ORDER.map(id => {
     const done = id === 'quiz' ? (state.quizAttempts || []).length : awarded(id);
@@ -913,16 +917,28 @@ function renderQuizResult() {
     <h3>错题解析</h3>
     ${wrong.map(f => `<div class="wrong-item"><p><span class="tchip t-${f.target}">${esc(R.targets[f.target])}</span> ${esc(f.prompt)}</p>
       <p>你的选择：${esc(f.options[f.chosen])}</p><p>正确答案：<b>${esc(f.options[f.answer])}</b></p><p class="explain">${esc(f.explanation)}</p></div>`).join('') || '<p>全对！</p>'}
+    ${rewardUnlocked(state?.quizAttempts)
+      ? '<button type="button" class="go-btn" id="toReward">🎮 奖励已解锁：算力工厂</button>'
+      : `<p class="note">课堂检测满 ${UNLOCK_SCORE} 分可解锁奖励小游戏「算力工厂」。</p>`}
     <button type="button" class="go-btn" id="retake">再测一次（换一组题）</button>
     <button type="button" class="ghost-btn" id="backMapR">回地图</button></div>`;
   $('retake').onclick = () => { exam = null; quizResult = null; quizAnswers = {}; renderQuiz(); };
   $('backMapR').onclick = () => { show('map'); renderMap(); };
-  setFocus($('backMapR'), '首次和最近成绩都会保留');
+  if ($('toReward')) { $('toReward').onclick = enterReward; setFocus($('toReward'), '检测达标，奖励已解锁'); }
+  else setFocus($('backMapR'), '首次和最近成绩都会保留');
+}
+
+/* ---------- 奖励小游戏（课堂检测 80 分以上解锁） ---------- */
+function enterReward() {
+  if (!rewardUnlocked(state?.quizAttempts)) return toast(`课堂检测满 ${UNLOCK_SCORE} 分才能进入奖励游戏`);
+  show('reward');
+  openReward($('reward'), { onExit: () => { show('map'); renderMap(); } });
 }
 
 /* ---------- HUD 事件 ---------- */
 $('to-map').onclick = () => { tryLeaveToMap(); };
 $('menu-btn').onclick = () => { $('menu').hidden = !$('menu').hidden; };
+$('reward-btn').onclick = () => { enterReward(); };
 $('sound').onclick = () => { sound.toggle(); renderHud(); sound.play('tap'); };
 $('story-replay').onclick = () => { if (state) showStory(screen === 'level' ? stage : screen === 'quiz' ? 'quiz' : 'intro'); };
 $('help').onclick = () => {

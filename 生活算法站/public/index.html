@@ -6,6 +6,7 @@
   <title>生活算法站 · 数学运算讲方法</title>
   <link rel="stylesheet" href="/style.css?v=story1" />
   <link rel="stylesheet" href="/story.css" />
+  <link rel="stylesheet" href="/reward.css" />
   <script src="/rules.js" defer></script>
   <script type="module" src="/app.mjs"></script>
 </head>
@@ -21,6 +22,7 @@
     <button id="story-replay" class="hud-btn" type="button" aria-label="重看任务剧情" title="重看任务剧情">▤</button>
     <button id="sound" class="hud-btn" type="button" aria-label="音效（默认关闭）">🔇</button>
     <button id="help" class="hud-btn help" type="button" aria-label="帮助">?</button>
+    <button id="reward-btn" class="hud-btn" type="button" aria-label="奖励小游戏" title="算力工厂（课堂检测满 80 分解锁）" hidden>🎮</button>
     <button id="menu-btn" class="hud-btn" type="button" aria-label="菜单">☰</button>
   </span>
   <div id="menu" class="menu" hidden>
@@ -73,6 +75,8 @@
 </section>
 
 <section id="quiz-page" class="screen paper-screen" hidden></section>
+
+<section id="reward" class="screen reward-screen" hidden></section>
 
 <div id="coach" class="coach" hidden aria-hidden="true"><span class="coach-text"></span><i class="coach-hand"></i></div>
 <div id="spot" class="spot" hidden></div>
