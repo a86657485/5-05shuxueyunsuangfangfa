@@ -1,6 +1,9 @@
 /* 教师大屏：按班看图表——进度、每个证据点首答/最终、误解（首次/仍未纠正）、检测按目标、出门条。 */
 import { api } from './sync.mjs';
+import { ANSWER_SHEET } from './answers.mjs';
 const R = globalThis.LessonRules;
+/* 标准答案各站展开状态：大屏每 5 秒重绘一次，需自己记住，否则会被收起 */
+const ansOpen = { temp: true };
 const CLASSES = ['501', '502', '503', '504'];
 const dash = document.getElementById('dash');
 let classId = '501', data = null, query = '', syncError = '';
@@ -21,6 +24,14 @@ function pairBars(rows, { a = '首答', b = '最终', unit = '%' } = {}) {
     <div class="pair"><span class="lbl" title="${esc(r.title || r.label)}">${r.label}</span>
       <div class="bars"><div class="bar a"><span style="width:${r.av}%"></span><em>${r.at}</em></div>
       <div class="bar b"><span style="width:${r.bv}%"></span><em>${r.bt}</em></div></div></div>`).join('');
+}
+function answerSheet() {
+  return ANSWER_SHEET.map(st => `<details class="ansbox" data-stage="${esc(st.stage)}" ${ansOpen[st.stage] ? 'open' : ''}>
+    <summary>${esc(st.short)} · ${esc(st.name)}${st.optional ? '（选做）' : ''} · ${st.parts.length} 个证据点</summary>
+    ${st.parts.map(p => `<div class="anspart"><h3>${esc(p.name)}</h3>
+      <table class="anstab"><tbody>${p.items.map(([q, a]) => `<tr><th>${esc(q)}</th><td>${esc(a)}</td></tr>`).join('')}</tbody></table>
+      ${p.wrong ? `<p class="answrong">${esc(p.wrong)}</p>` : ''}</div>`).join('')}
+  </details>`).join('');
 }
 function render() {
   const students = data?.students || [];
@@ -69,7 +80,7 @@ function render() {
     <div><h1>生活算法站 · 教师大屏</h1>
       <div class="muted">第5课 数学运算讲方法 · 轮次 ${esc(data?.round || '')} · 统计分母=本班名单 ${N} 人（证据点正确率分母=提交过该点的人数）</div></div>
     <div class="chips" id="classes">${CLASSES.map(c => `<button data-c="${c}" class="${c === classId ? 'on' : ''}">${c}班</button>`).join('')}</div>
-    <div class="actions"><button id="refresh">刷新</button><button id="testMode">教师测试</button><button id="answers">题库与答案</button><button id="newRound" class="warn">开启本班新一轮</button></div>
+    <div class="actions"><button id="refresh">刷新</button><button id="testMode">教师测试</button><button id="showAnswers">标准答案</button><button id="answers">题库与答案</button><button id="newRound" class="warn">开启本班新一轮</button></div>
   </header>
   ${syncError ? `<p class="err">${esc(syncError)}</p>` : ''}
   <div class="kpi">
@@ -91,6 +102,9 @@ function render() {
     <section class="panel wide"><h2>⑤ 出门条（${refN}人）：我原来以为 → 现在我认为</h2>
       ${refN ? `<div class="two">${['was', 'now'].map(k => `<div>${Object.entries(k === 'was' ? WAS : NOW).map(([v, t]) => `<div class="stack-row"><span class="lbl">${t}</span><div class="stack"><span class="${k === 'was' ? 's-was' : 's-done'}" style="width:${pct(ref[k][v] || 0, refN)}%"></span></div><span class="num">${ref[k][v] || 0}</span></div>`).join('')}</div>`).join('')}</div>` : '<p class="muted">尚无证据</p>'}
     </section>
+    <section class="panel wide" id="ansSheet"><h2>⑥ 各站标准答案 <span class="muted small" style="font-weight:400">（与 /test 的「本步参考答案」同一份数据）</span></h2>
+      ${answerSheet()}
+    </section>
   </div>
   <section class="panel" style="margin-top:12px">
     <h2>学生明细 <input id="q" placeholder="查姓名（只筛选下表，不改变上方统计）" value="${esc(query)}"></h2>
@@ -100,6 +114,8 @@ function render() {
   </section>`;
   dash.querySelectorAll('#classes button').forEach(b => { b.onclick = () => { classId = b.dataset.c; load(); }; });
   dash.querySelector('#refresh').onclick = load;
+  dash.querySelector('#showAnswers').onclick = () => { document.getElementById('ansSheet').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  dash.querySelectorAll('.ansbox').forEach(d => d.addEventListener('toggle', () => { ansOpen[d.dataset.stage] = d.open; }));
   dash.querySelector('#testMode').onclick = () => { location.href = '/test'; };
   dash.querySelector('#q').oninput = e => { query = e.target.value.trim(); const pos = e.target.selectionStart; render(); const q = dash.querySelector('#q'); q.focus(); q.setSelectionRange(pos, pos); };
   dash.querySelector('#newRound').onclick = async () => {

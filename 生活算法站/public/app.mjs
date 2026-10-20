@@ -8,6 +8,7 @@ import { setFocus, spotlight, place as placeCoach } from './focus.mjs';
 import { sound } from './sfx.mjs';
 import { mapBackground, places, sprite, pickCharacter, guideSvg, CHARACTERS, mountRpg, paintLoginPreview } from './world.mjs';
 import { STORY, openStory } from './story.mjs';
+import { TEST_ANSWERS } from './answers.mjs';
 import { openReward } from './reward.mjs';
 import { rewardUnlocked, UNLOCK_SCORE } from './reward-rules.mjs';
 
@@ -341,20 +342,7 @@ const PARTS = {
     scaffold: ['先选公式，再套三步：输入已知 → 计算（写清怎么算）→ 输出所求。', '示例句：「输入长和宽；计算周长：用……；输出周长。」', '错因对照：运算顺序写错（如长+宽×2 忘了括号）。'],
     example: '写法框架：输入已知量 → 计算（写清公式与顺序）→ 输出结果。' }
 };
-const TEST_ANSWERS = {
-  'temp.chain': '所求=摄氏温度；已知=华氏温度50℉；怎么求=用已知公式转换；输入=已知、处理=怎么求、输出=所求',
-  'temp.order': '减32 → 乘5 → 除以9（乘5、除以9可互换）；小周错因=运算顺序不对',
-  'temp.steps': '输入 华氏温度的值 / 计算 摄氏温度的值：用华氏温度减32，乘5，再除以9 / 输出 摄氏温度的值',
-  'flow.paper': '四项自查全勾，点“我画好了”',
-  'flow.fix': '输入华氏温度值=图框形状不对；输出摄氏温度值、计算摄氏温度值=执行顺序不对；末尾空位=缺少图框；开始=没问题',
-  'seeds.chain': '所求=第10组种子数+一共的种子数；已知=组数和规律；怎么求=先算m再算s',
-  'seeds.steps': '手算 m=21 s=120；输入 组数n / 计算 m：m=n×2+1 / 计算 s：s=n×(3+m)÷2 / 输出 m 和 s 的值',
-  'seeds.flow': '开始、结束=圆角；输入组数、输出=平行四边形；两个计算=直角',
-  'signin.rule': '3 × 签到次数 − 2',
-  'signin.steps': '手算 43；输入 签到次数 / 计算 积分：用我找到的规律 / 输出 积分',
-  'signin.reflect': '任选两句',
-  'formula.steps': '如长方形：输入 长和宽 / 计算 周长：（长+宽）×2 / 输出 周长'
-};
+/* 参考答案集中在 answers.mjs，教师大屏用同一份数据 */
 const targetChips = targets => targets.map(t => `<span class="tchip t-${t}">${esc(R.targets[t].split(' ')[0])}</span>`).join('');
 
 /* ---------- 关卡框架 ---------- */
