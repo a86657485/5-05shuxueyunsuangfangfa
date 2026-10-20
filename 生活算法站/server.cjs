@@ -261,7 +261,10 @@ function createService(options = {}) {
         }
       }
       if (p.startsWith('/api/')) fail(404, '接口不存在');
-      if (['/test', '/teacher'].includes(p)) teacher(req);
+      if (['/test', '/teacher'].includes(p)) {
+        teacher(req);
+        if (p === '/teacher') console.log(`[教师端] ${String(req.socket.remoteAddress || '').replace(/^::ffff:/, '')} 打开了教师大屏`);
+      }
       const aliases = { '/': 'index.html', '/teacher': 'teacher.html', '/test': 'index.html', '/demo': 'index.html' };
       let relative = aliases[p];
       if (!relative) {
