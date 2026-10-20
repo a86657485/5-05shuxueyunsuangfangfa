@@ -79,7 +79,12 @@ function createService(options = {}) {
   }
   function json(res, status, data) { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); }
   function fail(status, message, extra = {}) { throw Object.assign(new Error(message), { status, ...extra }); }
-  function teacher(req) { if (!isTeacherAddress(req.socket.remoteAddress, networkInterfaces(), allow)) fail(403, '教师入口仅限教师设备访问'); }
+  function teacher(req) {
+    if (isTeacherAddress(req.socket.remoteAddress, networkInterfaces(), allow)) return;
+    const from = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+    console.log(`[教师端拒绝] 来自 ${from} ${req.method} ${req.url}`);
+    fail(403, `教师入口仅限教师设备访问（你的地址 ${from} 不在放行范围）`);
+  }
   function signedStudent(req) { const session = cookieSession(req); if (!session) fail(401, '请先选择班级与姓名'); const s = student(session.sid); if (!s) fail(401, '学生身份不存在'); return s; }
   function matchIdentity(req, body) {
     const s = signedStudent(req);
@@ -294,7 +299,10 @@ function lanAddresses() {
 if (require.main === module) {
   const service = createService();
   const port = Number(process.env.PORT) || DEFAULT_PORT;
+  const allowList = parseAllowList(process.env.TEACHER_ALLOW);
   service.server.listen(port, '0.0.0.0', () => {
+    const ipOf = n => [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.');
+    console.log(`教师端放行范围：${allowList.length ? allowList.map(a => `${ipOf(a.base)}/${a.prefix}`).join('、') : '仅本机'}`);
     console.log(`教师本机入口：http://localhost:${port}/teacher（免密码，限教师设备访问）`);
     for (const ip of lanAddresses()) console.log(`学生局域网入口：http://${ip}:${port}`);
     console.log('课堂数据保存在 runtime/classroom.sqlite；关闭此窗口即停止服务。');
