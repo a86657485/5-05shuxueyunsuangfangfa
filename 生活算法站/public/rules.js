@@ -39,7 +39,7 @@
         { id: 'steps', name: '写出四步，请同桌照着做', targets: ['K1', 'K2', 'G1'] },
         { id: 'flow', name: '把步骤画成流程图', targets: ['K2'] }
       ] },
-    { id: 'signin', name: '阅读小站：签到积分', short: '签到积分', points: 10, aim: 'T（独立迁移）',
+    { id: 'signin', name: '阅读小站：签到积分', short: '签到积分', points: 10, aim: 'T（迁移应用）',
       parts: [
         { id: 'rule', name: '找规律并举例验证', targets: ['G1'] },
         { id: 'steps', name: '写方法卡：任何次数都能算', targets: ['K1', 'K2', 'G2'] },
@@ -347,7 +347,8 @@
         return out(chainOk && slotOk,
           chainOk && slotOk ? '对！已知的华氏温度是输入，公式是处理，所求的摄氏温度是输出。'
             : !chainOk ? '再读题：要求出来的是什么？题目已经告诉我们什么？靠什么求？'
-              : '三问答对了。再想想：哪个先“放进去”，哪个是“算出来”的？', { chainOk, slotOk });
+              : '三问答对了。再想想：哪个先“放进去”，哪个是“算出来”的？', { chainOk, slotOk,
+            wrongIds: ['ask', 'known', 'how'].filter(id => r[id] !== k[id]).concat(['in', 'proc', 'out'].filter(id => s[id] !== k.slots[id])) });
       }
       case 'temp.order': {
         const ops = Array.isArray(r.ops) ? r.ops : [];
@@ -373,7 +374,10 @@
         let handOk = null;
         if (stage === 'seeds' && r.hand) handOk = Number(r.hand.m) === 21 && Number(r.hand.s) === 120;
         if (stage === 'signin' && r.hand) handOk = Number(r.hand.p) === 43;
-        return out(run.ok, run.msg, { row: run.row, handOk, trace: run.results.map(x => ({ test: x.test, outs: x.outs, ok: x.ok })) });
+        const row = (r.rows || [])[run.row] || {};
+        const field = !row.verb || row.verb === 'think' ? 'verb' : !row.obj || row.obj === 'ANS' || run.tag === 'ipo-swap' ? 'obj'
+          : row.verb === 'calc' && ['vague-step', 'op-order', 'no-verify', 'no-method'].includes(run.tag) ? 'method' : 'row';
+        return out(run.ok, run.msg, { row: run.row, field: run.ok ? null : field, handOk, trace: run.results.map(x => ({ test: x.test, outs: x.outs, ok: x.ok })) });
       }
       case 'flow.paper': {
         const items = Array.isArray(r.checks) ? r.checks : [];
@@ -382,11 +386,13 @@
       case 'flow.fix': {
         const marks = r.marks || {};
         let ok = true, wrongMarks = 0;
+        const wrongIds = [];
         for (const b of flawedFlow) {
           const m = marks[b.id];
           const want = b.fault || 'none';
           if (b.fault === 'order') { if (m !== 'order') ok = false; }
           else if ((m || 'none') !== want) ok = false;
+          if ((m || 'none') !== want) wrongIds.push(b.id);
           if (m && m !== want) {
             wrongMarks++;
             if (b.fault === 'shape' || (m === 'shape' && !b.fault)) tags.push('shape-mix');
@@ -399,7 +405,7 @@
             if (b.fault === 'missing') tags.push('flow-missing');
           }
         }
-        return out(ok, ok ? '三处都改对了：输入用平行四边形，先计算再输出，最后要有“结束”。' : '还有地方没找对。逐个图框问自己：形状对吗？先后对吗？缺什么吗？', { wrongMarks });
+        return out(ok, ok ? '3类问题涉及的4个位置都标对了：输入用平行四边形，计算和输出的位置互换，最后补“结束”。' : '还有位置没标对。3类问题涉及4个位置：逐个检查形状、先后和缺框。', { wrongMarks, wrongIds });
       }
       case 'seeds.chain': {
         const ask = Array.isArray(r.ask) ? r.ask : [];
@@ -420,7 +426,7 @@
         let ok = true;
         for (const b of seedFlowBoxes) if (shapes[b.id] !== b.shape) { ok = false; if (shapes[b.id]) tags.push('shape-mix'); }
         if (!ok && !tags.length) tags.push('shape-mix');
-        return out(ok, ok ? '流程图画对了：一眼就能看出先输入、再算m、再算s、最后输出。' : '有图框选错了：开始/结束用圆角，处理用直角，输入/输出用平行四边形。');
+        return out(ok, ok ? '流程图画对了：一眼就能看出先输入、再算m、再算s、最后输出。' : '有图框选错了：开始/结束用圆角，处理用直角，输入/输出用平行四边形。', { wrongIds: seedFlowBoxes.filter(b => shapes[b.id] !== b.shape).map(b => b.id) });
       }
       case 'signin.rule': {
         const checks = signinTable.map(([k, p]) => ruleValue(r, k) === p);
@@ -434,6 +440,75 @@
       }
       default: return out(false, '未知证据点');
     }
+  }
+
+  /* 有效提交失败后的支架：只定位当前作品，不代选、不代交。 */
+  function supportFor(stage, part, record, assessment, errorStreak) {
+    if (!assessment || assessment.ok) return null;
+    const level = Math.max(1, Math.min(3, Number(errorStreak) || 1));
+    const e = assessment.evidence || {}, r = record || {};
+    const result = (texts, target) => ({ level, text: texts[level - 1], target });
+    if (part === 'chain') {
+      const seed = stage === 'seeds';
+      const id = seed ? (!e.askOk ? 'ask' : !e.knownOk ? 'known' : 'how') : (e.wrongIds || [])[0] || 'ask';
+      const targets = { ask: 'qAsk', known: 'qKnown', how: 'qHow', in: 'sIn', proc: 'sProc', out: 'sOut' };
+      const asks = Array.isArray(r.ask) ? r.ask : [];
+      const askChanges = [!asks.includes('m10') ? '补选第10组的种子数' : '', !asks.includes('sum') ? '补选一共分发的种子数' : '', asks.includes('g1') ? '取消第1组的种子数（这是已知）' : ''].filter(Boolean).join('；');
+      const texts = seed ? {
+        ask: ['再找一找题目里的两个问号，各问什么？', '所求可能不止一个，把“第10组”和“一共”分别圈出来。', `在“所求”${askChanges}，再检查。`],
+        known: ['这道题已经告诉了哪些条件？', '把组数和种子分配规律与需要求出的结果分开。', '回到“已知”，选择组数n=10和每组比前一组多2粒这一条件，再检查。'],
+        how: ['总数公式里还要用哪个量？', 's=n×(3+m)÷2需要m。先找m的数据从哪里来。', '先用n算出m，才能把m放进s的公式。把“怎么求”改成先m后s，再检查。']
+      } : {
+        ask: ['看看板报需要把哪种温度介绍给伙伴。', '所求是现在还不知道、要用公式算出来的量。', '本题要把华氏换成摄氏。在“所求”选择摄氏温度，再检查其他部分。'],
+        known: ['先找题目直接给出的温度。', '输入来自已知资料，摄氏温度还没有算出来。', '题目直接给出了华氏50℉。回到“已知”选择这一资料，再检查。'],
+        how: ['资料中还给了什么可以算出结果？', '求解方法要说明怎样由已知得到所求，不能只估一个数。', '题目提供了华氏换摄氏的公式。在“怎么求解”选择用已知公式转换，再检查。'],
+        in: ['输入先放进题目给出的数据。', '想一想：计算前，我们手上已有哪种温度？', '输入槽应放已知的华氏50℉。改这一槽，再检查处理和输出。'],
+        proc: ['处理这一步要做什么？', '处理是按规则计算，不是给定的数或算出的结果。', '把换算公式放到“处理”槽，再检查其他两槽。'],
+        out: ['算完以后，伙伴想看到什么？', '输出对应所求：给伙伴看我们算出的量。', '输出槽应放所求的摄氏温度，改后再检查。']
+      };
+      return result(texts[id], { kind: 'group', id: targets[id] });
+    }
+    if (stage === 'temp' && part === 'order') {
+      const opsWrong = !e.orderOk;
+      return result(opsWrong ? ['看看括号圈住的是哪个运算。', '先做括号里的运算，另两个运算再接着排。', '先清空运算卡，把“减32”排在第一个位置，再安排乘5、除9，并重新算一算。']
+        : ['你的运算顺序已能求解，再看小周的做法。', '比较你和小周最先做的运算，想想括号的作用。', '小周没有先减32。到“小周错在哪”选择与运算顺序和括号有关的理由，再检查。'], { kind: opsWrong ? 'ops' : 'reason', id: opsWrong ? 'opsClear' : 'why' });
+    }
+    if (part === 'steps') {
+      const row = Math.max(0, Number(e.row) || 0), step = `第${row + 1}步`, tag = (assessment.tags || [])[0];
+      const pid = stage === 'formula' ? r.problem : stage;
+      const names = { temp: ['华氏温度', '摄氏温度'], seeds: ['组数n', 'm和s'], signin: ['签到次数', '积分'], rect: ['长和宽', '周长'], trip: ['速度和时间', '路程'], avg: ['总个数和人数', '平均个数'] }[pid] || ['已知数', '所求结果'];
+      const common = [`看看${step}，同桌执行到这里缺少了什么？`, `${step}要写清“做什么、对哪个数、怎么算”，并使用前面已有的数据。`];
+      const specifics = {
+        'missing-input': `${step}计算前还没有输入所需数据。把“输入${names[0]}”移到计算之前，再让同桌执行。`,
+        'output-early': `${step}输出时结果还没有算好。把计算放在输出之前，再执行。`,
+        'dep-order': `${step}要用m，但m还没有算出。把“计算m”移到“计算s”前面，再执行。`,
+        'missing-output': `结果还没交给伙伴。在最后补写“输出${names[1]}”，再执行。`,
+        'vague-step': `${step}不能只写“想一想”或“算一下”。${e.field === 'method' ? '在“怎么算”中选择明确的计算规则' : '先选具体动作，再补对象和计算方法'}，再执行。`,
+        'algo-is-answer': `${step}写死了一次答案。把对象改成要计算或输出的${names[1]}，保留输入和计算方法，再用两个数试。`,
+        'ipo-swap': `${step}的对象与动作不相符：已知的${names[0]}要输入，所求的${names[1]}要计算后输出。改当前对象再执行。`,
+        'op-order': `${step}请在“怎么算”中检查运算先后：${pid === 'temp' ? '华氏温度先减32，再乘5、除9' : '长方形的长与宽先相加，再乘2'}。选择明确包含这个顺序的方法，再执行。`,
+        'no-method': `${step}请在“怎么算”中对照题目给出的公式选择方法，再执行两个输入。`,
+        'no-verify': `${step}所用的积分规律还未对上表。回看已验证的规律，在“怎么算”选择“用我找到的规律”；若仍不符，先回上一步验证。`
+      };
+      return result([...common, specifics[tag] || `${step}按同桌停下来的提示补清数据来源或计算方法，再执行。`], { kind: 'row', row, field: e.field || 'row' });
+    }
+    if (stage === 'flow' && part === 'fix') {
+      const id = (e.wrongIds || [])[0] || 'b0', box = flawedFlow.find(b => b.id === id);
+      const specific = id === 'b1' ? '这个框写的是“输入”，应使用输入输出图框；把这一位置标为“图框形状不对”。'
+        : id === 'b2' || id === 'b3' ? '计算和输出的位置要互换：先计算再输出。两个位置都要标为“执行顺序不对”。'
+          : id === 'b4' ? '最后的空位应有“结束”。把这一位置标为“缺少图框”。'
+            : '“开始”的圆角矩形是合适的。在这里选择“这里没问题”，再检查其他位置。';
+      return result([`检查当前${box?.text ? `“${box.text}”` : '空白'}位置：它在算法里做什么？`, '分三类检查：图框形状、执行先后、缺少图框。注意顺序互换涉及两个位置。', specific], { kind: 'flow', id });
+    }
+    if (stage === 'seeds' && part === 'flow') {
+      const id = (e.wrongIds || [])[0] || 'f0', box = seedFlowBoxes.find(b => b.id === id);
+      return result([`看看“${box.text}”是在起止、输入输出还是计算。`, '根据内容的作用选形状：起止、输入输出、计算分别用不同图框。', `“${box.text}”应使用${shapeNames[box.shape]}。只修改这个位置，再检查。`], { kind: 'shape', id });
+    }
+    if (stage === 'signin' && part === 'rule') {
+      const id = Number(r.a) !== 3 ? 'a' : r.sign !== '-' ? 'sign' : 'b';
+      return result(['比较表格相邻两行：每多签到1次，积分多了多少？', '先用相邻差确定“次数前面的数”，再用签到1次的积分检查后面的调整。', id === 'a' ? '相邻积分1、4、7、10每次增加3。先把次数前面的数调到3，再验证。' : '签到1次时，1×3=3，而表中是1分，相差2。把后面的调整改成减2，再用四行验证。'], { kind: 'rule', id });
+    }
+    return result(['先看当前操作还缺哪一步。', '对照本页的说明补全当前操作，再检查。', '完成当前自查或选择后，再点击提交；有疑问可请老师看你的作品。'], { kind: 'group', id: stage === 'signin' ? (!r.was ? 'was' : 'now') : 'checks' });
   }
 
   /* 星级：按证据点最终通过比例 + 首答质量。通关门槛 = ≥2 星。
@@ -515,7 +590,7 @@
     targets, stages, stageIds, requiredIds, stageOf, partOf, misconceptions,
     problems, formulaChoices, verbs, objectChoices, methodsFor, rowText,
     runSteps, runOnce, expected, tempChainKey, tempOps, runOps, flawedFlow, faultNames,
-    seedFlowBoxes, shapeNames, signinTable, ruleValue, assessPart, stageSummary,
+    seedFlowBoxes, shapeNames, signinTable, ruleValue, assessPart, supportFor, stageSummary,
     PASS_STARS, starGlyphs, computeStars
   };
 });

@@ -1,6 +1,7 @@
 /* 教师大屏：按班看图表——进度、每个证据点首答/最终、误解（首次/仍未纠正）、检测按目标、出门条。 */
 import { api } from './sync.mjs';
 import { ANSWER_SHEET } from './answers.mjs';
+import { tierAttempts, scorePair, answerText } from './teacher-metrics.mjs';
 const R = globalThis.LessonRules;
 /* 标准答案各站展开状态：大屏每 5 秒重绘一次，需自己记住，否则会被收起 */
 const ansOpen = { temp: true };
@@ -37,15 +38,17 @@ function render() {
   const students = data?.students || [];
   const N = students.length;
   const entered = students.filter(s => Object.values(s.records || {}).some(r => r.summary?.started) || (s.quizAttempts || []).length).length;
-  const mainDone = students.filter(s => R.requiredIds.every(id => (s.awards || []).some(a => a.stage === id))).length;
-  const quized = students.filter(s => (s.quizAttempts || []).length);
+  const mainDone = students.filter(s => R.requiredIds.every(id => s.records?.[id]?.summary?.pass)).length;
+  const quized = students.filter(s => tierAttempts(s, 'base').length);
+  const challenge = students.filter(s => tierAttempts(s, 'challenge').length);
+  const legacy = students.filter(s => tierAttempts(s, 'legacy').length);
   const avg = arr => arr.length ? Math.round(arr.reduce((x, y) => x + y, 0) / arr.length) : null;
-  const q0 = avg(quized.map(s => s.quizAttempts[0].score)), q1 = avg(quized.map(s => s.quizAttempts.at(-1).score));
+  const q0 = avg(quized.map(s => tierAttempts(s, 'base')[0].score)), q1 = avg(quized.map(s => tierAttempts(s, 'base').at(-1).score));
 
   // ① 各站进度
   const prog = R.stages.map(st => {
-    const done = students.filter(s => (s.awards || []).some(a => a.stage === st.id)).length;
-    const going = students.filter(s => !(s.awards || []).some(a => a.stage === st.id) && s.records?.[st.id]?.summary?.started).length;
+    const done = students.filter(s => s.records?.[st.id]?.summary?.pass).length;
+    const going = students.filter(s => !s.records?.[st.id]?.summary?.pass && s.records?.[st.id]?.summary?.started).length;
     return { st, done, going, none: N - done - going };
   });
   // ② 证据点首答 vs 最终（分母=提交过该证据点的学生）
@@ -65,7 +68,7 @@ function render() {
   const misRows = Object.entries(mis).sort((a, b) => b[1].f - a[1].f).slice(0, 9).map(([t, v]) => ({ label: esc(R.misconceptions[t] || t), av: pct(v.f, N), bv: pct(v.l, N), at: `${v.f}人`, bt: `${v.l}人` }));
   // ④ 检测按目标：首次 vs 最近
   const tgtRows = Object.entries(R.targets).map(([t, name]) => {
-    const agg = which => quized.reduce((acc, s) => { const v = (which === 0 ? s.quizAttempts[0] : s.quizAttempts.at(-1)).byTarget?.[t]; if (v) { acc.r += v.right; acc.t += v.total; } return acc; }, { r: 0, t: 0 });
+    const agg = which => quized.reduce((acc, s) => { const attempts = tierAttempts(s, 'base'); const v = (which === 0 ? attempts[0] : attempts.at(-1)).byTarget?.[t]; if (v) { acc.r += v.right; acc.t += v.total; } return acc; }, { r: 0, t: 0 });
     const a = agg(0), b = agg(1);
     return { label: `${tchips([t])} ${esc(name.split(' ').slice(1).join(' '))}`, av: pct(a.r, a.t), bv: pct(b.r, b.t), at: a.t ? `${pct(a.r, a.t)}%` : '—', bt: b.t ? `${pct(b.r, b.t)}%（${quized.length}人）` : '尚无证据' };
   });
@@ -80,14 +83,15 @@ function render() {
     <div><h1>生活算法站 · 教师大屏</h1>
       <div class="muted">第5课 数学运算讲方法 · 轮次 ${esc(data?.round || '')} · 统计分母=本班名单 ${N} 人（证据点正确率分母=提交过该点的人数）</div></div>
     <div class="chips" id="classes">${CLASSES.map(c => `<button data-c="${c}" class="${c === classId ? 'on' : ''}">${c}班</button>`).join('')}</div>
-    <div class="actions"><button id="refresh">刷新</button><button id="testMode">教师测试</button><button id="showAnswers">标准答案</button><button id="answers">题库与答案</button><button id="newRound" class="warn">开启本班新一轮</button></div>
+    <div class="actions"><button id="refresh">刷新</button><button id="testMode">教师测试</button><button id="showAnswers">标准答案</button><button id="answers">题库与答案</button><button id="examControl" ${data ? '' : 'disabled'}>${data?.examClosed ? '重新开放本班检测' : '关闭本班检测'}</button><button id="newRound" class="warn">开启本班新一轮</button></div>
   </header>
   ${syncError ? `<p class="err">${esc(syncError)}</p>` : ''}
   <div class="kpi">
     <div><b>${N}</b>名单</div><div><b>${entered}</b>已开始</div><div><b>${N - entered}</b>未开始</div>
-    <div><b>${mainDone}</b>主线4站完成</div><div><b>${quized.length}</b>已检测</div>
-    <div><b>${q0 == null ? '—' : q0 + '→' + q1}</b>检测均分 首次→最近</div>
+    <div><b>${mainDone}</b>主线当前通过</div><div><b>${quized.length}</b>已交基础检测</div>
+    <div><b>${q0 == null ? '—' : q0 + '→' + q1}</b>基础均分 首次→最近</div>
   </div>
+  <p class="muted exam-state">本班检测：${data?.examClosed ? '已关闭' : '按必做站完成情况自动开放'}。基础达80%解锁奖励；挑战自选，不能弥补基础不足。${challenge.length}人已交挑战，${legacy.length}人保留旧版整卷记录。</p>
   <div class="grid">
     <section class="panel"><h2>① 各站进度</h2>
       ${N ? prog.map(p => `<div class="stack-row"><span class="lbl">${esc(p.st.short)}${p.st.optional ? '（选做）' : ''}</span>
@@ -97,8 +101,8 @@ function render() {
     <section class="panel"><h2>② 证据点：首答 vs 最终正确率</h2>${pairBars(partRows.filter(r => r.n), { a: '首答', b: '最终' }) }</section>
     <section class="panel"><h2>③ 误解：首次出现 vs 仍未纠正（人数）</h2>${pairBars(misRows, { a: '首次出现', b: '仍未纠正' })}
       <p class="muted small">建议：先处理“仍未纠正”最多的一项，再请学生回到对应证据点重做。</p></section>
-    <section class="panel"><h2>④ 课堂检测：按目标正确率</h2>${quized.length ? pairBars(tgtRows, { a: '首次', b: '最近' }) : '<p class="muted">尚无证据</p>'}
-      <p class="muted small">重测高分不等于独立迁移；迁移看“签到积分·方法卡”的首答。</p></section>
+    <section class="panel"><h2>④ 基础检测：按目标正确率</h2>${quized.length ? pairBars(tgtRows, { a: '首次', b: '最近' }) : '<p class="muted">尚无证据</p>'}
+      <p class="muted small">共同先学不算加强提示；结合方法卡首答、实际帮助等级和修订看学习证据。挑战、旧版整卷不混入本图。</p></section>
     <section class="panel wide"><h2>⑤ 出门条（${refN}人）：我原来以为 → 现在我认为</h2>
       ${refN ? `<div class="two">${['was', 'now'].map(k => `<div>${Object.entries(k === 'was' ? WAS : NOW).map(([v, t]) => `<div class="stack-row"><span class="lbl">${t}</span><div class="stack"><span class="${k === 'was' ? 's-was' : 's-done'}" style="width:${pct(ref[k][v] || 0, refN)}%"></span></div><span class="num">${ref[k][v] || 0}</span></div>`).join('')}</div>`).join('')}</div>` : '<p class="muted">尚无证据</p>'}
     </section>
@@ -108,7 +112,7 @@ function render() {
   </div>
   <section class="panel" style="margin-top:12px">
     <h2>学生明细 <input id="q" placeholder="查姓名（只筛选下表，不改变上方统计）" value="${esc(query)}"></h2>
-    <table><thead><tr><th>姓名</th><th>当前位置</th><th>主线</th><th>首答正确</th><th>尝试</th><th>最高提示</th><th>仍未纠正的误解</th><th>签到方法卡（最终）</th><th>检测 首/近</th><th>最近同步</th></tr></thead>
+    <table><thead><tr><th>姓名</th><th>当前位置</th><th>主线</th><th>首答正确</th><th>尝试</th><th>最高帮助</th><th>仍未纠正的误解</th><th>签到方法卡（最终）</th><th>基础 / 挑战 / 旧版（首→近）</th><th>最近同步</th></tr></thead>
       <tbody>${list.map(row).join('') || '<tr><td colspan="10" class="muted">尚无证据</td></tr>'}</tbody></table>
     <p class="muted">更新于 ${data?.at ? new Date(data.at).toLocaleTimeString('zh-CN') : '—'} · 每5秒自动刷新 · 带*为名单外手动登录</p>
   </section>`;
@@ -122,15 +126,20 @@ function render() {
     if (!confirm(`为 ${classId} 班开启新一轮？旧一轮记录保留在数据库，大屏和学生端从零开始。`)) return;
     await api('/api/teacher/new-round', { method: 'POST', body: { classId } }); load();
   };
+  dash.querySelector('#examControl').onclick = async e => {
+    e.currentTarget.disabled = true;
+    try { await api('/api/teacher/exam-close', { method: 'POST', body: { classId, closed: !data.examClosed } }); await load(); }
+    catch (err) { syncError = '检测设置失败：' + err.message; render(); }
+  };
   dash.querySelector('#answers').onclick = async () => {
     const a = await api('/api/teacher/answers');
     const w = window.open('', '_blank');
-    if (w) w.document.body.innerHTML = '<meta charset="utf-8"><h2>题库与答案</h2>' + a.questions.map(q => `<p><b>[${q.target}·${q.level}]</b> ${esc(q.prompt)}<br>答案：${esc(q.options[q.answer])}<br><small>${esc(q.explanation)}</small></p>`).join('');
+    if (w) w.document.body.innerHTML = '<meta charset="utf-8"><h2>题库与答案</h2>' + a.questions.map(q => `<p><b>[${esc(q.id)}·${esc(q.tier || '旧版')}·${esc(q.type || 'choice')}]</b> ${esc(q.prompt)}${q.excludedFromNewDraw ? '（仅保留历史，新卷不抽）' : ''}<br>答案：${esc(answerText(q))}<br><small>${esc(q.explanation)}</small></p>`).join('');
   };
 }
 function row(s) {
-  const done = R.requiredIds.filter(id => (s.awards || []).some(a => a.stage === id)).length;
-  const cur = R.requiredIds.find(id => !(s.awards || []).some(a => a.stage === id));
+  const done = R.requiredIds.filter(id => s.records?.[id]?.summary?.pass).length;
+  const cur = R.requiredIds.find(id => !s.records?.[id]?.summary?.pass);
   const curSum = cur && s.records?.[cur]?.summary;
   const curPart = curSum?.currentPart ? R.partOf(cur, curSum.currentPart)?.name.split('：')[0].split('（')[0] : '';
   const withId = R.stageIds.map(id => ({ id, sum: s.records?.[id]?.summary })).filter(x => x.sum);
@@ -146,11 +155,11 @@ function row(s) {
   const started = sums.some(x => x.started) || q.length;
   return `<tr class="${started ? '' : 'idle'}">
     <td>${esc(s.student.name)}${s.student.manual ? '*' : ''}</td>
-    <td>${started ? (cur ? `${esc(R.stageOf(cur).short)}·${esc(curPart || '')}` : '主线完成') : '未开始'}</td>
-    <td>${done}/4</td><td>${graded ? `${firstOk}/${graded}` : '—'}</td><td>${tries || '—'}</td><td>${hint || '—'}</td>
+    <td>${s.lessonExpired ? '上一课次（只读，请开新一轮）' : started ? (cur ? `${esc(R.stageOf(cur).short)}·${esc(curPart || '')}` : '主线完成') : '未开始'}</td>
+    <td>${done}/${R.requiredIds.length}</td><td>${graded ? `${firstOk}/${graded}` : '—'}</td><td>${tries || '—'}</td><td>${hint || '—'}</td>
     <td>${tags.map(t => `<span class="tag">${esc((R.misconceptions[t] || t).slice(0, 12))}</span>`).join('') || '—'}</td>
     <td class="cardtxt">${card ? `<span class="${card.assessment.ok ? 'okt' : 'badt'}">${card.assessment.ok ? '✓' : '✗'}</span> ${esc(cardText)}` : '—'}</td>
-    <td>${q.length ? `${q[0].score}/${q.at(-1).score}` : '—'}</td>
+    <td class="quiz-tiers">基础 ${scorePair(tierAttempts(s, 'base'))}<br>挑战 ${scorePair(tierAttempts(s, 'challenge'))}<br>旧版 ${scorePair(tierAttempts(s, 'legacy'))}</td>
     <td>${s.updated ? new Date(s.updated).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '—'}</td></tr>`;
 }
 load();

@@ -46,13 +46,397 @@ const groups = [
     ['T', '流程图里“输出m和s”画成了直角矩形。应该怎么改？', ['改成平行四边形', '改成圆角矩形', '删掉这个框', '不用改'], 0, '输出用平行四边形。']
   ]]
 ];
-const questions = groups.flatMap(([code, goal, items]) => items.map(([level, prompt, options, answer, explanation], i) => ({
+const legacyQuestions = groups.flatMap(([code, goal, items]) => items.map(([level, prompt, options, answer, explanation], i) => ({
   id: `${code}-${i + 1}`, target: code, goal, level, prompt, options, answer, explanation
 })));
+const metadata = {
+  "G1-1": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：识别顺序执行"
+  },
+  "G1-2": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：比较运算顺序与结果"
+  },
+  "G1-3": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：分析前后步骤的数据依赖"
+  },
+  "G1-4": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：理解算法在求解中的作用"
+  },
+  "G1-5": {
+    "tier": "challenge",
+    "type": "choice",
+    "literacy": "计算思维：在生活情境推演步骤后果"
+  },
+  "G1-6": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：沿流程方向执行"
+  },
+  "G1-7": {
+    "tier": "challenge",
+    "type": "choice",
+    "literacy": "计算思维：用实例验证规律"
+  },
+  "G1-8": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：辨认顺序结构中的前后联系"
+  },
+  "G2-1": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：区分求解方法与一次答案"
+  },
+  "G2-2": {
+    "tier": "challenge",
+    "type": "choice",
+    "literacy": "计算思维：用变化输入检验方法的适用性"
+  },
+  "G2-3": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：建立输入规则输出关系"
+  },
+  "G2-4": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：对应所求已知与求解过程"
+  },
+  "G2-5": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：在熟悉数学情境辨认通用方法"
+  },
+  "G2-6": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：解释方法与计算结果的关系"
+  },
+  "G2-7": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：识别新计算任务的输入"
+  },
+  "G2-8": {
+    "tier": "challenge",
+    "type": "choice",
+    "literacy": "计算思维：概括同一方法对变化输入的作用",
+    "excludedFromNewDraw": true
+  },
+  "K1-1": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：辨认明确完整的自然语言步骤"
+  },
+  "K1-2": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：诊断含糊不可执行的步骤"
+  },
+  "K1-3": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：按数据依赖排列算法步骤"
+  },
+  "K1-4": {
+    "tier": "challenge",
+    "type": "choice",
+    "literacy": "计算思维：检查新情境算法的完整性"
+  },
+  "K1-5": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：判断步骤表达是否明确"
+  },
+  "K1-6": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：发现先计算后输入的错误"
+  },
+  "K1-7": {
+    "tier": "challenge",
+    "type": "choice",
+    "literacy": "计算思维：评价变化情境中的方法卡"
+  },
+  "K1-8": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：辨认步骤的处理功能"
+  },
+  "K2-1": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：使用流程图表示开始结束"
+  },
+  "K2-2": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：使用流程图表示输入输出"
+  },
+  "K2-3": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：按操作内容选择处理图框"
+  },
+  "K2-4": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：读取流程线的执行方向"
+  },
+  "K2-5": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：诊断流程中的提前输出"
+  },
+  "K2-6": {
+    "tier": "challenge",
+    "type": "choice",
+    "literacy": "计算思维：在新公式情境组织完整流程"
+  },
+  "K2-7": {
+    "tier": "challenge",
+    "type": "choice",
+    "literacy": "计算思维：联系自然语言与流程图两种表达"
+  },
+  "K2-8": {
+    "tier": "base",
+    "type": "choice",
+    "literacy": "计算思维：按输出功能修正图框"
+  }
+};
+const interactiveQuestions = [
+  {
+    "id": "G1-I1",
+    "target": "G1",
+    "goal": "目标1 顺序结构与算法作用",
+    "tier": "base",
+    "type": "order",
+    "level": "M",
+    "literacy": "计算思维：把计算步骤按执行顺序组织",
+    "prompt": "买同样的笔，总价＝单价×数量。把三步排好。",
+    "instruction": "点卡片的“上移”或“下移”，排好后检查。",
+    "interaction": {
+      "items": [
+        {
+          "id": "calc_total",
+          "text": "用单价×数量计算总价"
+        },
+        {
+          "id": "show_total",
+          "text": "输出总价"
+        },
+        {
+          "id": "read_data",
+          "text": "输入单价和数量"
+        }
+      ],
+      "initialOrder": [
+        "calc_total",
+        "show_total",
+        "read_data"
+      ],
+      "controls": [
+        "moveUp",
+        "moveDown"
+      ],
+      "dragRequired": false
+    },
+    "answer": [
+      "read_data",
+      "calc_total",
+      "show_total"
+    ],
+    "explanation": "先输入已知的单价和数量，再计算总价，最后输出结果。计算需要先获得数据，输出需要先算出结果。"
+  },
+  {
+    "id": "G2-I1",
+    "target": "G2",
+    "goal": "目标2 算法是方法描述",
+    "tier": "base",
+    "type": "match",
+    "level": "M",
+    "literacy": "计算思维：区分通用方法、输入和一次结果",
+    "prompt": "每盒彩笔6元。把三张卡片与它的含义配对。",
+    "instruction": "先点左侧卡片，再点右侧含义；可以重新配对。",
+    "interaction": {
+      "leftItems": [
+        {
+          "id": "method_card",
+          "text": "输入盒数→盒数×6→输出总价"
+        },
+        {
+          "id": "result_card",
+          "text": "18元"
+        },
+        {
+          "id": "input_card",
+          "text": "买3盒"
+        }
+      ],
+      "rightItems": [
+        {
+          "id": "one_result",
+          "text": "一次购买的结果"
+        },
+        {
+          "id": "known_input",
+          "text": "输入数据"
+        },
+        {
+          "id": "general_method",
+          "text": "适用于不同盒数的方法"
+        }
+      ],
+      "selectionMode": "click_pair",
+      "oneToOne": true,
+      "dragRequired": false
+    },
+    "answer": {
+      "method_card": "general_method",
+      "result_card": "one_result",
+      "input_card": "known_input"
+    },
+    "explanation": "“输入盒数→盒数×6→输出总价”描述怎样算，换盒数仍可使用；18元是一次计算的结果；买3盒是这次给定的输入。"
+  },
+  {
+    "id": "K1-I1",
+    "target": "K1",
+    "goal": "重难点1 自然语言描述算法",
+    "tier": "base",
+    "type": "order",
+    "level": "M",
+    "literacy": "计算思维：按数据依赖组织自然语言算法",
+    "prompt": "每盒彩笔6元，买2盒，共优惠2元。把求应付金额的四步排好。",
+    "instruction": "点卡片的“上移”或“下移”，排好后检查。",
+    "interaction": {
+      "items": [
+        {
+          "id": "show_pay",
+          "text": "输出应付金额"
+        },
+        {
+          "id": "calc_pay",
+          "text": "用原价－2计算应付金额"
+        },
+        {
+          "id": "read_boxes",
+          "text": "输入购买盒数"
+        },
+        {
+          "id": "calc_price",
+          "text": "用购买盒数×6计算原价"
+        }
+      ],
+      "initialOrder": [
+        "show_pay",
+        "calc_pay",
+        "read_boxes",
+        "calc_price"
+      ],
+      "controls": [
+        "moveUp",
+        "moveDown"
+      ],
+      "dragRequired": false
+    },
+    "answer": [
+      "read_boxes",
+      "calc_price",
+      "calc_pay",
+      "show_pay"
+    ],
+    "explanation": "先输入盒数，再求原价，才能用原价减优惠求应付金额，最后输出。正确执行时原价12元，应付10元；这些数值不是作答时的提示。"
+  },
+  {
+    "id": "K2-I1",
+    "target": "K2",
+    "goal": "重难点2 明确有序的步骤/流程图",
+    "tier": "base",
+    "type": "flow",
+    "level": "M",
+    "literacy": "计算思维：把操作功能对应到流程图符号",
+    "prompt": "求购物总价。给三个内容配上合适的图框。",
+    "instruction": "先点左侧内容，再点右侧图框；可以重新配对。",
+    "interaction": {
+      "leftItems": [
+        {
+          "id": "begin",
+          "text": "开始"
+        },
+        {
+          "id": "calculate",
+          "text": "计算总价＝单价×数量"
+        },
+        {
+          "id": "output",
+          "text": "输出总价"
+        }
+      ],
+      "rightItems": [
+        {
+          "id": "parallelogram",
+          "text": "平行四边形",
+          "shape": "parallelogram"
+        },
+        {
+          "id": "rounded_rectangle",
+          "text": "圆角矩形",
+          "shape": "rounded_rectangle"
+        },
+        {
+          "id": "rectangle",
+          "text": "直角矩形",
+          "shape": "rectangle"
+        }
+      ],
+      "selectionMode": "click_pair",
+      "oneToOne": true,
+      "dragRequired": false
+    },
+    "answer": {
+      "begin": "rounded_rectangle",
+      "calculate": "rectangle",
+      "output": "parallelogram"
+    },
+    "explanation": "开始或结束用圆角矩形；计算处理用直角矩形；输入或输出用平行四边形。根据每个内容在算法中的作用选框。"
+  }
+];
+const questions = [...legacyQuestions.map(q => ({ ...q, ...metadata[q.id] })), ...interactiveQuestions];
+const BANK_VERSION = 'lesson5-bank-v20261021';
+const PAPER_VERSION = 'lesson5-paper-v20261021';
+const paperConfig = { base: { count: 16, perTarget: 4, interactivePerTarget: 1, choicePerTarget: 3 }, challenge: { count: 4, perTarget: 1, choicePerTarget: 1 }, passPercent: 80 };
+const randomize = list => list.map(value => ({ value, n: crypto.randomInt(0, 1e9) })).sort((a, b) => a.n - b.n).map(x => x.value);
+// Historical 20-question sampling remains available for old tooling; new examinations use pickPaper.
 const PER_GOAL = [5, 5, 5, 5];
-function pickQuestions() {
-  return groups.flatMap(([code], g) => questions.filter(q => q.target === code)
-    .map(q => ({ q, n: crypto.randomInt(0, 1e9) })).sort((a, b) => a.n - b.n).slice(0, PER_GOAL[g]).map(v => v.q));
+function pickQuestions() { return groups.flatMap(([code], index) => randomize(legacyQuestions.filter(q => q.target === code)).slice(0, PER_GOAL[index])); }
+function pickPaper(tier = 'base') {
+  const config = paperConfig[tier];
+  if (!config || !['base', 'challenge'].includes(tier)) throw new Error('未知检测层级');
+  return groups.flatMap(([code]) => {
+    const pool = questions.filter(q => q.target === code && q.tier === tier && !q.excludedFromNewDraw);
+    const fixed = tier === 'base' ? pool.filter(q => q.type !== 'choice') : [];
+    return randomize([...fixed, ...randomize(pool.filter(q => q.type === 'choice')).slice(0, config.choicePerTarget)]);
+  });
 }
-function publicQuestion(q) { return { id: q.id, target: q.target, goal: q.goal, level: q.level, prompt: q.prompt, options: q.options }; }
-module.exports = { questions, groups: groups.map(([, goal]) => goal), codes: groups.map(([c]) => c), pickQuestions, publicQuestion, PER_GOAL };
+function publicQuestion(q) {
+  return Object.fromEntries(['id', 'target', 'goal', 'level', 'tier', 'type', 'literacy', 'prompt', 'options', 'instruction', 'interaction'].filter(k => q[k] !== undefined).map(k => [k, q[k]]));
+}
+function gradeAnswer(q, answer) {
+  if (!q.type || q.type === 'choice') return Number.isInteger(answer) && answer === q.answer;
+  if (q.type === 'order') return Array.isArray(answer) && answer.length === q.answer.length && answer.every((value, i) => value === q.answer[i]);
+  if (q.type === 'match' || q.type === 'flow') {
+    if (!answer || typeof answer !== 'object' || Array.isArray(answer)) return false;
+    const keys = Object.keys(q.answer), given = Object.keys(answer);
+    return given.length === keys.length && new Set(Object.values(answer)).size === keys.length && keys.every(key => Object.hasOwn(answer, key) && answer[key] === q.answer[key]);
+  }
+  return false;
+}
+module.exports = { questions, groups: groups.map(([, goal]) => goal), codes: groups.map(([c]) => c), pickQuestions, pickPaper, publicQuestion, gradeAnswer, paperConfig, BANK_VERSION, PAPER_VERSION, PER_GOAL };

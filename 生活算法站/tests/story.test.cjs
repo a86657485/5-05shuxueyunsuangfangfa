@@ -94,7 +94,9 @@ test('主线结算文案交代真实任务成果与下一站', async () => {
   assert.match(STORY.temp.outcome || '', /气温.*黑板/);
   assert.match(STORY.flow.outcome || '', /方法.*实验室/);
   assert.match(STORY.seeds.outcome || '', /分配.*阅读站/);
-  assert.match(STORY.signin.outcome || '', /阅读.*指南.*20题/);
+  assert.match(STORY.signin.outcome || '', /阅读.*指南.*基础检测.*自选挑战/);
+  assert.match(copy(STORY.quiz), /四个必做站.*基础检测.*自选挑战/);
+  assert.doesNotMatch(copy(STORY.quiz), /可以先试试|20题独立检查/);
 });
 
 function fakeDocument() {

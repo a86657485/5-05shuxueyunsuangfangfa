@@ -42,6 +42,11 @@ describe('俯视校园 RPG 主界面', () => {
       assert.match(rpg, new RegExp(name));
     }
   });
+  it('异步挂载后隐藏或已移除的地图不接管检测和奖励键盘', () => {
+    const rpg = read('public/rpg.mjs');
+    const onKey = rpg.slice(rpg.indexOf('const onKey = e =>'), rpg.indexOf("window.addEventListener('keydown'"));
+    assert.match(onKey, /const onKey = e => \{\s*if \(!running\) return;\s*if \(!host\.isConnected \|\| host\.closest\('\[hidden\]'\)\) \{ keys\.clear\(\); return; \}/);
+  });
   it('页面不外链且启动脚本仍无 /workspace', () => {
     assert.equal(read('启动课堂.command').includes('/workspace'), false);
     assert.equal(/https?:\/\//.test(read('public/rpg.mjs')), false);

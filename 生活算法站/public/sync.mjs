@@ -17,14 +17,23 @@ export function queueEvent(payload) {
   list.push({ ...payload, queuedAt: Date.now() });
   save(list);
 }
-export async function flushQueue() {
-  const list = load();
-  if (!list.length) return;
-  const remain = [];
-  for (const item of list) {
-    try { await api('/api/event', { method: 'POST', body: item }); }
-    catch (e) { if (e.status !== 409) remain.push(item); }
-  }
-  save(remain);
-  return remain.length;
+let flushSequence = Promise.resolve();
+export function flushQueue(identity) {
+  if (!identity?.sid || !identity?.round) return Promise.resolve(0);
+  const matches = item => item.sid === identity.sid && item.round === identity.round;
+  const run = flushSequence.then(async () => {
+    let item;
+    while ((item = load().find(matches))) {
+      try { await api('/api/event', { method: 'POST', body: item }); }
+      catch (e) {
+        if (e.status) throw e;
+        return load().filter(matches).length;
+      }
+      // Read again: a new event may have been queued while the request was in flight.
+      save(load().filter(entry => !(matches(entry) && entry.eventId === item.eventId)));
+    }
+    return 0;
+  });
+  flushSequence = run.catch(() => {});
+  return run;
 }
