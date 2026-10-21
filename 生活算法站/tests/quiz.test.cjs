@@ -5,14 +5,19 @@ const quiz = require('../quiz.cjs');
 const R = require('../public/rules.js');
 
 describe('检测题库（按目标对齐）', () => {
-  it('32题，4个目标各8题，每题标注目标与层级', () => {
-    assert.equal(quiz.questions.length, 32);
+  it('保留32题并新增4道交互题，每题标注目标、层级、题型与素养', () => {
+    assert.equal(quiz.questions.length, 36);
+    assert.equal(quiz.questions.filter(q => q.type === 'choice').length, 32);
     assert.deepEqual(quiz.codes, ['G1', 'G2', 'K1', 'K2']);
     for (const q of quiz.questions) {
       assert.ok(R.targets[q.target], q.id);
       assert.ok(['A', 'M', 'T'].includes(q.level), q.id);
-      assert.ok(q.answer >= 0 && q.answer < q.options.length);
-      assert.equal(new Set(q.options).size, q.options.length, '选项不重复 ' + q.id);
+      assert.ok(['base', 'challenge'].includes(q.tier), q.id);
+      assert.ok(q.literacy, q.id);
+      if (q.type === 'choice') {
+        assert.ok(q.answer >= 0 && q.answer < q.options.length);
+        assert.equal(new Set(q.options).size, q.options.length, '选项不重复 ' + q.id);
+      } else assert.ok(['order', 'match', 'flow'].includes(q.type), q.id);
     }
   });
   it('每个目标都有迁移题（T）', () => {

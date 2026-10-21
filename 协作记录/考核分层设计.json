@@ -1,0 +1,744 @@
+{
+  "schemaVersion": 1,
+  "version": "v20261021",
+  "bankVersion": "lesson5-bank-v20261021",
+  "paperVersion": "lesson5-paper-v20261021",
+  "lesson": "五年级第5课 数学运算讲方法",
+  "source": {
+    "path": "生活算法站/quiz.cjs",
+    "baseCommit": "2b02947",
+    "sha256AtDesign": "26d3354b3711b669c2ae02cb713aa00349a5ea1b1a4eb7c7eb65afc4ff7d00b7",
+    "legacyCount": 32,
+    "preserveFields": [
+      "id",
+      "target",
+      "goal",
+      "level",
+      "prompt",
+      "options",
+      "answer",
+      "explanation"
+    ],
+    "legacyAnswerType": "number，沿用原选项下标，不转换为字符串或新编号"
+  },
+  "goals": {
+    "G1": "目标1 顺序结构与算法作用",
+    "G2": "目标2 算法是方法描述",
+    "K1": "重难点1 自然语言描述算法",
+    "K2": "重难点2 明确有序的步骤/流程图"
+  },
+  "difficultyDefinitions": {
+    "D1": "把计算规则写成明确可执行的步骤，注意括号、数据来源和执行先后，并用流程图表示。",
+    "D2": "区分某一次答案与通用求解方法，换输入检验，并在新情境中应用和解释。"
+  },
+  "legacyMetadata": [
+    {
+      "id": "G1-1",
+      "target": "G1",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：识别顺序执行",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "识别依次执行的基本结构。"
+    },
+    {
+      "id": "G1-2",
+      "target": "G1",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：比较运算顺序与结果",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "通过错误运算判断顺序影响，属本课核心。"
+    },
+    {
+      "id": "G1-3",
+      "target": "G1",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：分析前后步骤的数据依赖",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "识别求s需先有m，覆盖本课核心难点。"
+    },
+    {
+      "id": "G1-4",
+      "target": "G1",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：理解算法在求解中的作用",
+      "difficulty": [
+        "D2"
+      ],
+      "classificationReason": "判断方法指导逐步求解的作用。"
+    },
+    {
+      "id": "G1-5",
+      "target": "G1",
+      "tier": "challenge",
+      "type": "choice",
+      "literacy": "计算思维：在生活情境推演步骤后果",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "在另一生活情境中推演把末步提前的后果。"
+    },
+    {
+      "id": "G1-6",
+      "target": "G1",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：沿流程方向执行",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "只需沿已明确的自上而下流程线判断先后。"
+    },
+    {
+      "id": "G1-7",
+      "target": "G1",
+      "tier": "challenge",
+      "type": "choice",
+      "literacy": "计算思维：用实例验证规律",
+      "difficulty": [
+        "D2"
+      ],
+      "classificationReason": "在使用推广公式前，选择验证证据和检验方法。"
+    },
+    {
+      "id": "G1-8",
+      "target": "G1",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：辨认顺序结构中的前后联系",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "从给定选项辨认步骤依次执行的联系。",
+      "reviewNote": "后一步依赖前一步是本课顺序实例的重要联系，不是所有顺序结构必须满足的定义；保留原题最优选项，不作充分必要条件解释。"
+    },
+    {
+      "id": "G2-1",
+      "target": "G2",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：区分求解方法与一次答案",
+      "difficulty": [
+        "D2"
+      ],
+      "classificationReason": "识别通用换算步骤与单次结果。"
+    },
+    {
+      "id": "G2-2",
+      "target": "G2",
+      "tier": "challenge",
+      "type": "choice",
+      "literacy": "计算思维：用变化输入检验方法的适用性",
+      "difficulty": [
+        "D2"
+      ],
+      "classificationReason": "比较50和86两个输入，诊断写死答案的局限。"
+    },
+    {
+      "id": "G2-3",
+      "target": "G2",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：建立输入规则输出关系",
+      "difficulty": [
+        "D2"
+      ],
+      "classificationReason": "把公式看作从输入到输出的计算规则。"
+    },
+    {
+      "id": "G2-4",
+      "target": "G2",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：对应所求已知与求解过程",
+      "difficulty": [
+        "D2"
+      ],
+      "classificationReason": "直接对应输出、输入、处理。"
+    },
+    {
+      "id": "G2-5",
+      "target": "G2",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：在熟悉数学情境辨认通用方法",
+      "difficulty": [
+        "D2"
+      ],
+      "classificationReason": "虽原标T，但只需区分完整方法与结果，适合基础。"
+    },
+    {
+      "id": "G2-6",
+      "target": "G2",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：解释方法与计算结果的关系",
+      "difficulty": [
+        "D2"
+      ],
+      "classificationReason": "辨认方法指导计算获得答案。"
+    },
+    {
+      "id": "G2-7",
+      "target": "G2",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：识别新计算任务的输入",
+      "difficulty": [
+        "D2"
+      ],
+      "classificationReason": "虽原标T，但只需识别已知速度时间，属于一步应用。"
+    },
+    {
+      "id": "G2-8",
+      "target": "G2",
+      "tier": "challenge",
+      "type": "choice",
+      "literacy": "计算思维：概括同一方法对变化输入的作用",
+      "difficulty": [
+        "D2"
+      ],
+      "classificationReason": "概括同一类计算方法在换输入后的作用；保留原题并附表述边界。",
+      "reviewNote": "原文“不同输入得到对应的不同结果”不能推广为所有算法都成立；本轮保留旧题、旧ID和原答案，v20261021新抽卷排除，不影响历史卷回放。",
+      "excludedFromNewDraw": true,
+      "excludeReason": "不同输入不保证不同输出，原题表述存在泛化边界；v20261021新抽卷排除，原题与原答案保留用于历史卷回放。"
+    },
+    {
+      "id": "K1-1",
+      "target": "K1",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：辨认明确完整的自然语言步骤",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "在本课熟悉公式中辨认输入处理输出。"
+    },
+    {
+      "id": "K1-2",
+      "target": "K1",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：诊断含糊不可执行的步骤",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "识别算一下没有说明对象和方法。"
+    },
+    {
+      "id": "K1-3",
+      "target": "K1",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：按数据依赖排列算法步骤",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "熟悉种子公式中先m后s的依赖属于基础核心。"
+    },
+    {
+      "id": "K1-4",
+      "target": "K1",
+      "tier": "challenge",
+      "type": "choice",
+      "literacy": "计算思维：检查新情境算法的完整性",
+      "difficulty": [
+        "D2"
+      ],
+      "classificationReason": "在平均数新情境中检查方法缺少的环节。"
+    },
+    {
+      "id": "K1-5",
+      "target": "K1",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：判断步骤表达是否明确",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "辨认别人可以照着做的表达标准。"
+    },
+    {
+      "id": "K1-6",
+      "target": "K1",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：发现先计算后输入的错误",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "按所需数据是否已获得判断执行先后。"
+    },
+    {
+      "id": "K1-7",
+      "target": "K1",
+      "tier": "challenge",
+      "type": "choice",
+      "literacy": "计算思维：评价变化情境中的方法卡",
+      "difficulty": [
+        "D2"
+      ],
+      "classificationReason": "综合比较签到方法卡的明确、有序和通用性。"
+    },
+    {
+      "id": "K1-8",
+      "target": "K1",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：辨认步骤的处理功能",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "辨认已给出的计算步骤属于处理。"
+    },
+    {
+      "id": "K2-1",
+      "target": "K2",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：使用流程图表示开始结束",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "基础符号功能。"
+    },
+    {
+      "id": "K2-2",
+      "target": "K2",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：使用流程图表示输入输出",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "基础符号功能。"
+    },
+    {
+      "id": "K2-3",
+      "target": "K2",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：按操作内容选择处理图框",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "给定计算内容选择符号。"
+    },
+    {
+      "id": "K2-4",
+      "target": "K2",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：读取流程线的执行方向",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "辨认箭头表达顺序和方向。"
+    },
+    {
+      "id": "K2-5",
+      "target": "K2",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：诊断流程中的提前输出",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "熟悉情境中判断计算与输出顺序。"
+    },
+    {
+      "id": "K2-6",
+      "target": "K2",
+      "tier": "challenge",
+      "type": "choice",
+      "literacy": "计算思维：在新公式情境组织完整流程",
+      "difficulty": [
+        "D2"
+      ],
+      "classificationReason": "在长方形周长任务中检查整条流程。"
+    },
+    {
+      "id": "K2-7",
+      "target": "K2",
+      "tier": "challenge",
+      "type": "choice",
+      "literacy": "计算思维：联系自然语言与流程图两种表达",
+      "difficulty": [
+        "D2"
+      ],
+      "classificationReason": "解释同一算法跨表示方式的关系。"
+    },
+    {
+      "id": "K2-8",
+      "target": "K2",
+      "tier": "base",
+      "type": "choice",
+      "literacy": "计算思维：按输出功能修正图框",
+      "difficulty": [
+        "D1"
+      ],
+      "classificationReason": "虽原标T，但只需对输出内容应用符号功能，保留基础。"
+    }
+  ],
+  "newInteractiveQuestions": [
+    {
+      "id": "G1-I1",
+      "target": "G1",
+      "goal": "目标1 顺序结构与算法作用",
+      "tier": "base",
+      "type": "order",
+      "level": "M",
+      "literacy": "计算思维：把计算步骤按执行顺序组织",
+      "difficulty": [
+        "D1"
+      ],
+      "prompt": "买同样的笔，总价＝单价×数量。把三步排好。",
+      "instruction": "点卡片的“上移”或“下移”，排好后检查。",
+      "interaction": {
+        "items": [
+          {
+            "id": "calc_total",
+            "text": "用单价×数量计算总价"
+          },
+          {
+            "id": "show_total",
+            "text": "输出总价"
+          },
+          {
+            "id": "read_data",
+            "text": "输入单价和数量"
+          }
+        ],
+        "initialOrder": [
+          "calc_total",
+          "show_total",
+          "read_data"
+        ],
+        "controls": [
+          "moveUp",
+          "moveDown"
+        ],
+        "dragRequired": false
+      },
+      "answer": [
+        "read_data",
+        "calc_total",
+        "show_total"
+      ],
+      "answerSchema": "ordered_item_ids",
+      "explanation": "先输入已知的单价和数量，再计算总价，最后输出结果。计算需要先获得数据，输出需要先算出结果。",
+      "evidence": "能把新计算情境组织成输入—处理—输出的可执行顺序。",
+      "scoring": "顺序与answer数组完全一致得1分，否则0分；不按移动次数或速度评分。"
+    },
+    {
+      "id": "G2-I1",
+      "target": "G2",
+      "goal": "目标2 算法是方法描述",
+      "tier": "base",
+      "type": "match",
+      "level": "M",
+      "literacy": "计算思维：区分通用方法、输入和一次结果",
+      "difficulty": [
+        "D2"
+      ],
+      "prompt": "每盒彩笔6元。把三张卡片与它的含义配对。",
+      "instruction": "先点左侧卡片，再点右侧含义；可以重新配对。",
+      "interaction": {
+        "leftItems": [
+          {
+            "id": "method_card",
+            "text": "输入盒数→盒数×6→输出总价"
+          },
+          {
+            "id": "result_card",
+            "text": "18元"
+          },
+          {
+            "id": "input_card",
+            "text": "买3盒"
+          }
+        ],
+        "rightItems": [
+          {
+            "id": "one_result",
+            "text": "一次购买的结果"
+          },
+          {
+            "id": "known_input",
+            "text": "输入数据"
+          },
+          {
+            "id": "general_method",
+            "text": "适用于不同盒数的方法"
+          }
+        ],
+        "selectionMode": "click_pair",
+        "oneToOne": true,
+        "dragRequired": false
+      },
+      "answer": {
+        "method_card": "general_method",
+        "result_card": "one_result",
+        "input_card": "known_input"
+      },
+      "answerSchema": "left_id_to_right_id",
+      "explanation": "“输入盒数→盒数×6→输出总价”描述怎样算，换盒数仍可使用；18元是一次计算的结果；买3盒是这次给定的输入。",
+      "evidence": "不靠记忆温度或种子数值，辨认方法与一次答案的区别。",
+      "scoring": "三对均与answer映射一致得1分，否则0分；顺序不影响映射判分。"
+    },
+    {
+      "id": "K1-I1",
+      "target": "K1",
+      "goal": "重难点1 自然语言描述算法",
+      "tier": "base",
+      "type": "order",
+      "level": "M",
+      "literacy": "计算思维：按数据依赖组织自然语言算法",
+      "difficulty": [
+        "D1"
+      ],
+      "prompt": "每盒彩笔6元，买2盒，共优惠2元。把求应付金额的四步排好。",
+      "instruction": "点卡片的“上移”或“下移”，排好后检查。",
+      "interaction": {
+        "items": [
+          {
+            "id": "show_pay",
+            "text": "输出应付金额"
+          },
+          {
+            "id": "calc_pay",
+            "text": "用原价－2计算应付金额"
+          },
+          {
+            "id": "read_boxes",
+            "text": "输入购买盒数"
+          },
+          {
+            "id": "calc_price",
+            "text": "用购买盒数×6计算原价"
+          }
+        ],
+        "initialOrder": [
+          "show_pay",
+          "calc_pay",
+          "read_boxes",
+          "calc_price"
+        ],
+        "controls": [
+          "moveUp",
+          "moveDown"
+        ],
+        "dragRequired": false
+      },
+      "answer": [
+        "read_boxes",
+        "calc_price",
+        "calc_pay",
+        "show_pay"
+      ],
+      "answerSchema": "ordered_item_ids",
+      "explanation": "先输入盒数，再求原价，才能用原价减优惠求应付金额，最后输出。正确执行时原价12元，应付10元；这些数值不是作答时的提示。",
+      "evidence": "能读懂自然语言步骤中各数的来源，并按前后依赖安排执行。",
+      "scoring": "顺序与answer数组完全一致得1分，否则0分；不按移动次数或速度评分。"
+    },
+    {
+      "id": "K2-I1",
+      "target": "K2",
+      "goal": "重难点2 明确有序的步骤/流程图",
+      "tier": "base",
+      "type": "flow",
+      "level": "M",
+      "literacy": "计算思维：把操作功能对应到流程图符号",
+      "difficulty": [
+        "D1"
+      ],
+      "prompt": "求购物总价。给三个内容配上合适的图框。",
+      "instruction": "先点左侧内容，再点右侧图框；可以重新配对。",
+      "interaction": {
+        "leftItems": [
+          {
+            "id": "begin",
+            "text": "开始"
+          },
+          {
+            "id": "calculate",
+            "text": "计算总价＝单价×数量"
+          },
+          {
+            "id": "output",
+            "text": "输出总价"
+          }
+        ],
+        "rightItems": [
+          {
+            "id": "parallelogram",
+            "text": "平行四边形",
+            "shape": "parallelogram"
+          },
+          {
+            "id": "rounded_rectangle",
+            "text": "圆角矩形",
+            "shape": "rounded_rectangle"
+          },
+          {
+            "id": "rectangle",
+            "text": "直角矩形",
+            "shape": "rectangle"
+          }
+        ],
+        "selectionMode": "click_pair",
+        "oneToOne": true,
+        "dragRequired": false
+      },
+      "answer": {
+        "begin": "rounded_rectangle",
+        "calculate": "rectangle",
+        "output": "parallelogram"
+      },
+      "answerSchema": "left_id_to_right_id",
+      "explanation": "开始或结束用圆角矩形；计算处理用直角矩形；输入或输出用平行四边形。根据每个内容在算法中的作用选框。",
+      "evidence": "在购物计算内容中应用三种图框功能，既看内容也看符号。",
+      "scoring": "三对均与answer映射一致得1分，否则0分；顺序不影响映射判分。"
+    }
+  ],
+  "expectedBankCount": 36,
+  "paper": {
+    "targetOrder": [
+      "G1",
+      "G2",
+      "K1",
+      "K2"
+    ],
+    "base": {
+      "count": 16,
+      "perTarget": 4,
+      "requiredInteractiveIds": [
+        "G1-I1",
+        "G2-I1",
+        "K1-I1",
+        "K2-I1"
+      ],
+      "selectionPerTarget": {
+        "fixedInteractiveCount": 1,
+        "randomLegacyChoiceCount": 3,
+        "legacyFilter": {
+          "tier": "base",
+          "type": "choice"
+        }
+      },
+      "selectionWithoutReplacement": true
+    },
+    "challenge": {
+      "count": 4,
+      "perTarget": 1,
+      "selectionPerTarget": {
+        "randomLegacyChoiceCount": 1,
+        "legacyFilter": {
+          "tier": "challenge",
+          "type": "choice"
+        }
+      },
+      "selectionWithoutReplacement": true,
+      "unlock": "16道基础题均已作答后自动解锁；不要求基础已达标",
+      "optional": true
+    },
+    "totalCount": 20,
+    "retainSelectedQuestionIds": true,
+    "retainBankAndPaperVersion": true,
+    "shuffleLegacyOptions": "继续使用既有服务端选项打乱，并同步正确下标；保留旧MCQ的number答案类型。",
+    "selectionExclusion": {
+      "field": "excludedFromNewDraw",
+      "excludeWhen": true,
+      "rule": "新版抽卷只从excludedFromNewDraw不为true的题目中抽取；未设置该字段视为未排除。",
+      "excludedIds": [
+        "G2-8"
+      ],
+      "remainingG2ChallengeIds": [
+        "G2-2"
+      ],
+      "historicalReplay": "排除只作用于新版抽卷；历史卷按已保存的真实题目ID及原答案回放，不删除、不重编号。"
+    }
+  },
+  "scoring": {
+    "pointsPerQuestion": 1,
+    "baseMax": 16,
+    "challengeMax": 4,
+    "basePassPercent": 80,
+    "basePassMinCorrect": 13,
+    "rewardUnlockPercent": 80,
+    "rewardUsesBaseOnly": true,
+    "challengeAddsPointsOnly": true,
+    "challengeCompensatesBase": false,
+    "interactivePartialCredit": false,
+    "unansweredOnSubmission": "记未答及0分，不强制补做挑战；不跨课续答"
+  },
+  "answerContracts": {
+    "choice": "number：选项下标；原32题保持旧结构。",
+    "order": "string[]：从第一步到最后一步的稳定item.id数组；判分逐项比对，不能只按文字。",
+    "match": "Record<string,string>：leftItems[].id到rightItems[].id的完整一一映射；缺配、多余键、重复右项均不算全对。",
+    "flow": "与match相同；图框shape只是呈现，不是学生答案的正确标记。"
+  },
+  "delivery": {
+    "publicAllowlist": [
+      "id",
+      "target",
+      "goal",
+      "level",
+      "tier",
+      "type",
+      "prompt",
+      "options",
+      "instruction",
+      "interaction"
+    ],
+    "serverOnly": [
+      "answer",
+      "answerSchema",
+      "explanation",
+      "evidence",
+      "scoring",
+      "classificationReason",
+      "reviewNote",
+      "difficulty"
+    ],
+    "noInferenceHintsDuringAssessment": true,
+    "beforeSubmissionFeedback": "只显示已选择/尚未作答、配对状态和操作导航；不显示正误、不预选正确项、不给算法推理提示。",
+    "afterSubmission": "按实际错题给答案、解释和回学入口；首次与最近成绩分开保留。",
+    "evidenceBoundary": "短测与任务作品互补；选择/排序正确不能单独证明能独立写出算法。"
+  },
+  "timingEstimateMinutes": {
+    "sharedLearning": [
+      4,
+      5
+    ],
+    "inquiry": [
+      13,
+      15
+    ],
+    "baseAssessment": 7,
+    "transitionsAndClosing": [
+      1,
+      2
+    ],
+    "rewardOnlyIfTimeRemains": [
+      0,
+      2
+    ],
+    "totalTarget": [
+      25,
+      30
+    ],
+    "challengeTiming": "基础提前完成或当课剩余时间做挑战，不要求所有学生完成，奖励和挑战不推高总时长。",
+    "validation": "仅为设计预算，尚未学生施测。"
+  },
+  "historicalPlan": "旧V2中的40分钟主线与下节课续检测是历史安排，本轮不沿用。"
+}

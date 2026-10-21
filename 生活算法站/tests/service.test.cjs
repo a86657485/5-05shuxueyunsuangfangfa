@@ -129,10 +129,21 @@ describe('classroom service', () => {
   });
 
   it('考核不泄露答案且可重考', async () => {
-    // complete remaining stages quickly for exam (exam doesn't require stages)
+    const locked = await req(port, 'POST', '/api/exam/create', { sid, round }, cookie);
+    assert.equal(locked.status, 409);
+    await ev('flow', 'paper', { done: true, checks: ['shape', 'arrow'] }, 'exam-flow-paper');
+    await ev('flow', 'fix', { marks: { b0: 'none', b1: 'shape', b2: 'order', b3: 'order', b4: 'missing' } }, 'exam-flow-fix');
+    await ev('seeds', 'chain', { ask: ['m10', 'sum'], known: 'n-rule', how: 'm-then-s' }, 'exam-seeds-chain');
+    await ev('seeds', 'steps', { rows: [{ verb: 'input', obj: 'n' }, { verb: 'calc', obj: 'm', method: 'ok' }, { verb: 'calc', obj: 's', method: 'ok' }, { verb: 'output', obj: 'ms' }] }, 'exam-seeds-steps');
+    await ev('seeds', 'flow', { shapes: Object.fromEntries(require('../public/rules.js').seedFlowBoxes.map(b => [b.id, b.shape])) }, 'exam-seeds-flow');
+    const rule = { a: 3, sign: '-', b: 2 };
+    await ev('signin', 'rule', rule, 'exam-signin-rule');
+    await ev('signin', 'steps', { rule, rows: [{ verb: 'input', obj: 'k' }, { verb: 'calc', obj: 'p', method: 'mine' }, { verb: 'output', obj: 'p' }] }, 'exam-signin-steps');
+    const ready = await ev('signin', 'reflect', { was: 'answer', now: 'method' }, 'exam-signin-reflect');
+    assert.equal(ready.json.currentExam.tier, 'base');
     const create = await req(port, 'POST', '/api/exam/create', { sid, round }, cookie);
     assert.equal(create.status, 200);
-    assert.equal(create.json.questions.length, 20);
+    assert.equal(create.json.questions.length, 16);
     assert.equal('answer' in create.json.questions[0], false);
     const answers = {};
     // need real answers from teacher endpoint
@@ -141,14 +152,14 @@ describe('classroom service', () => {
     for (const q of create.json.questions) {
       // find by prompt in bank — options shuffled so match prompt
       const full = bank.json.questions.find(x => x.id === q.id);
-      answers[q.id] = q.options.indexOf(full.options[full.answer]);
+      answers[q.id] = q.type === 'choice' ? q.options.indexOf(full.options[full.answer]) : full.answer;
     }
     const sub = await req(port, 'POST', '/api/exam/submit', { sid, round, examId: create.json.id, answers }, cookie);
     assert.equal(sub.status, 200);
     assert.equal(sub.json.score, 100);
     assert.deepEqual(Object.keys(sub.json.byTarget).sort(), ['G1', 'G2', 'K1', 'K2']);
     const create2 = await req(port, 'POST', '/api/exam/create', { sid, round }, cookie);
-    assert.equal(create2.json.questions.length, 20);
+    assert.equal(create2.json.questions.length, 16);
   });
 
   it('教师页非本机 403（模拟）', async () => {

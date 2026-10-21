@@ -10,7 +10,10 @@ import { mapBackground, places, sprite, pickCharacter, guideSvg, CHARACTERS, mou
 import { STORY, openStory } from './story.mjs';
 import { TEST_ANSWERS } from './answers.mjs';
 import { openReward } from './reward.mjs';
-import { rewardUnlocked, UNLOCK_SCORE } from './reward-rules.mjs';
+import { UNLOCK_SCORE } from './reward-rules.mjs';
+import { openLearning } from './learning.mjs';
+import { mountQuestion, answerComplete } from './quiz-ui.mjs';
+import { openMemoryReward } from './memory-reward.mjs';
 
 const R = globalThis.LessonRules;
 const $ = id => document.getElementById(id);
@@ -54,9 +57,14 @@ function canLeaveStage(id) {
   if (!meta || meta.optional) return true;
   return !!summaryOf(id).cleared;
 }
-const teachGuide = () => (summaryOf(stage).visits || 0) >= 2 || awarded(stage);
+const currentPartState = () => state?.records?.[stage]?.parts?.[curPart()?.id] || {};
+const errorCount = () => Number(currentPartState().errorStreak) || 0;
+const teachGuide = () => errorCount() >= 2;
+const rewardReady = () => isLocal || !!state?.examStatus?.rewardUnlocked;
 function unlocked(id) {
-  if (id === 'quiz' || mode === 'test') return true;
+  if (mode === 'test') return true;
+  if (state?.lessonExpired) return false;
+  if (id === 'quiz') return isLocal ? R.requiredIds.every(id => summaryOf(id).cleared) : !!(state?.examStatus?.open || state?.examStatus?.baseCompleted) && !state?.examStatus?.closed;
   const meta = R.stageOf(id); const req = R.requiredIds;
   if (meta.optional) return awarded(req[req.length - 1]);
   const i = req.indexOf(id);
@@ -70,35 +78,59 @@ const partRecord = (st, pt) => state?.records?.[st]?.parts?.[pt]?.last?.record |
 function applyLocal(p, assessment) {
   const rec = state.records[p.stage] ||= { parts: {}, history: [] };
   rec.parts ||= {}; rec.history ||= [];
-  const entry = { record: p.record, assessment, hintLevel: p.hintLevel, created: new Date().toISOString() };
+  if (rec.history.some(e => e.eventId === p.eventId)) return;
+  const entry = { eventId: p.eventId, part: p.part, record: p.record, assessment, hintLevel: p.hintLevel, created: new Date().toISOString() };
   const part = rec.parts[p.part] ||= { first: null, last: null, attempts: 0, hintMax: 0 };
   if (!part.first) part.first = entry;
-  part.last = entry; part.attempts++; part.hintMax = Math.max(part.hintMax, p.hintLevel);
+  let prior = Number.isFinite(part.errorStreak) ? part.errorStreak : 0;
+  if (!Number.isFinite(part.errorStreak)) {
+    for (const e of rec.history.filter(e => e.part === p.part).slice().reverse()) { if (e.assessment?.ok ?? e.ok) break; prior++; if (prior >= 3) break; }
+  }
+  part.errorStreak = assessment.ok ? 0 : prior + 1;
+  part.last = entry; part.attempts++; part.hintMax = Math.max(part.hintMax, p.hintLevel, Math.min(3,part.errorStreak));
+  rec.history.push(entry); if (rec.history.length > 80) rec.history.shift();
   const sum = R.stageSummary(p.stage, rec, false);
   if (sum.cleared && !awarded(p.stage)) {
     state.awards.push({ stage: p.stage, points: R.stageOf(p.stage).points, stars: sum.stars });
     state.points = state.awards.reduce((n, a) => n + a.points, 0);
   }
 }
-async function submitPart(record) {
+let eventSequence = Promise.resolve();
+function submitPart(record) {
   const pt = curPart().id;
   const assessment = R.assessPart(stage, pt, record);
   const payload = { sid: state.student.id, round: state.round, stage, part: pt, eventId: uid(), hintLevel, record };
+  const run = eventSequence.then(async () => {
+  const sameIdentity = () => state?.student.id === payload.sid && state?.round === payload.round;
+  const switched = () => ({ ok: false, saveFailed: true, feedback: '学生或课堂轮次已切换，请在当前课堂重新检查。', evidence: {}, tags: [] });
+  if (!sameIdentity()) return switched();
   if (isLocal) applyLocal(payload, assessment);
   else {
     try {
-      state = await api('/api/event', { method: 'POST', body: payload });
+      const remaining = await flushQueue(payload);
+      if (remaining) throw new Error('还有离线记录等待补传');
+      const saved = await api('/api/event', { method: 'POST', body: payload });
+      if (!sameIdentity()) return switched();
+      state = saved;
       setSync('已保存 ' + new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
-      flushQueue().catch(() => {});
     } catch (e) {
-      if (e.status === 409 && e.data?.round) { toast('老师开启了新一轮，请刷新页面'); return assessment; }
-      if (e.status && e.status < 500) { toast(e.message); return assessment; }
-      queueEvent(payload); applyLocal(payload, assessment);
+      if (e.status) {
+        const message = `本次没有保存：${e.message} 当前作品仍保留。`;
+        setSync('尚未保存', true);
+        return {ok:false,saveFailed:true,feedback:message,evidence:{},tags:[]};
+      }
+      if (!sameIdentity()) return switched();
+      try { queueEvent(payload); }
+      catch { return { ok: false, saveFailed: true, feedback: '本次未能保存离线记录，作品仍在页面，请恢复网络后再检查。', evidence: {}, tags: [] }; }
+      applyLocal(payload, assessment);
       setSync('网络不稳，已记下，稍后自动补传', true);
     }
   }
   renderHud();
   return assessment;
+  });
+  eventSequence = run.catch(() => {});
+  return run;
 }
 
 /* ---------- 屏幕与 HUD ---------- */
@@ -126,7 +158,7 @@ function renderHud() {
     }
   }
   const rb = $('reward-btn');
-  if (rb) rb.hidden = !rewardUnlocked(state.quizAttempts);
+  if (rb) rb.hidden = !rewardReady();
   $('hud-avatar-img').src = sprite(character, 'idle');
   $('hud-progress').innerHTML = PLACE_ORDER.map(id => {
     const done = id === 'quiz' ? (state.quizAttempts || []).length : awarded(id);
@@ -238,9 +270,10 @@ async function renderMap() {
   const world = $('map-world');
   $('map-guide-svg').innerHTML = guideSvg(56);
   const target = nextPlace();
-  $('mission-status').textContent = awarded(R.requiredIds.at(-1)) ? STORY.complete.task : STORY[target].task;
-  $('map-say').textContent = awarded(R.requiredIds.at(-1))
-    ? '体验指南四部分准备好了！到校门「出门条」做20题，检查换个输入是否仍会用。公式墙可以选做。'
+  $('mission-status').textContent = state.lessonExpired ? '上一课次的学习记录已保留为只读，请老师为本班开启新一轮。' : awarded(R.requiredIds.at(-1)) ? STORY.complete.task : STORY[target].task;
+  $('map-say').textContent = state.lessonExpired ? '今天请从新一轮开始，原来的作品、分数和记录都会保留。'
+    : awarded(R.requiredIds.at(-1))
+    ? '体验指南四部分准备好了！到校门完成基础检测，检查换个输入是否仍会用。挑战题和公式墙可以选做。'
     : `走到「${places[target].name}」：${places[target].label}。方向键或摇杆移动，靠近后按空格或点「对话」。`;
   if (rpg) { try { rpg.destroy(); } catch {} rpg = null; }
   rpg = await mountRpg(world, {
@@ -271,7 +304,8 @@ async function bumpVisit(id) {
 }
 async function enterPlace(id) {
   // walkthrough / 无障碍备用入口
-  if (!unlocked(id)) return toast('请先完成上一站');
+  if (state?.lessonExpired) return toast('这份学习记录属于上一课次，请老师为本班开启新一轮。');
+  if (!unlocked(id)) return toast(id === 'quiz' ? '完成四个必做站后，基础检测会开放；老师关闭检测时请等待老师安排。' : '请先完成上一站');
   sound.play('tap');
   avatarAt = id;
   if (rpg) { try { rpg.destroy(); } catch {} rpg = null; }
@@ -284,9 +318,10 @@ async function enterPlace(id) {
   setFocus(null);
   if (!sum.cleared) await showStory(id, true);
   startPart(sum.cleared ? 'summary' : null);
+  await openLearning(stage, {student:state.student,round:state.round,once:true});
 }
 function startPart(special) {
-  ui = {}; hintLevel = 0;
+  ui = {}; hintLevel = Math.min(3, Number(currentPartState().hintMax) || 0);
   show('level');
   renderLevel(special);
 }
@@ -363,17 +398,14 @@ function renderLevel(special) {
   $('scene').innerHTML = `<div class="part-card" id="card">
     <div class="part-head"><span class="learn">本步要学会：<b>${esc(info.learn)}</b></span>${targetChips(part.targets)}
       <span class="stars" title="本站星级">${esc(sum.starGlyphs || R.starGlyphs(sum.stars))}</span></div>
-    <div class="stage-mission"><span>${esc(STORY[stage].task)}</span><button type="button" class="ghost-btn" id="stage-story">重看任务</button></div>
-    ${guideOn ? `<div class="teach-guide" id="teachGuide"><b>教学引导</b>（第 ${sum.visits} 次进站）
-      <p>${esc((info.scaffold && info.scaffold[0]) || '按分步提示来，目标先拿到 2 星通关。')}</p>
-      ${info.example ? `<p class="example-line">${esc(info.example)}</p>` : ''}
-      <p class="note">不会替你交正确答案；若本步已有首答，会保留首次记录。</p></div>` : ''}
+    <div class="stage-mission"><span>${esc(STORY[stage].task)}</span><span class="stage-tools"><button type="button" class="ghost-btn" id="stage-learning">学习资料</button><button type="button" class="ghost-btn" id="stage-story">重看任务</button></span></div>
     <div id="body" class="part-body"></div>
     <div id="fb" class="feedback" role="status"></div>
   </div>`;
   $('stage-story').onclick = () => showStory(stage);
+  $('stage-learning').onclick = () => openLearning(stage,{student:state.student,round:state.round});
   $('actor').src = sprite(character, 'think');
-  if (guideOn) say('教学引导已打开', '分步提示更清楚，先争取 ★★☆ 通关');
+  if (guideOn) say('可以按提示继续修改', '先完成当前一步，再检查是否能照着做');
   else say('先自己想一想', '卡住再点右上角“?”');
   ({
     'temp.chain': partTempChain, 'temp.order': partTempOrder, 'temp.steps': () => partSteps('temp'),
@@ -407,12 +439,29 @@ function feedback(a, retryFocus) {
     fb.className = 'feedback bad';
     const tags = (a.tags || []).filter(t => R.misconceptions[t]);
     const tagLine = tags.length ? `<ul class="tag-compare">${tags.map(t => `<li><b>可能错因</b>：${esc(R.misconceptions[t])}</li>`).join('')}</ul>` : '';
-    const sc = teachGuide() && info.scaffold ? `<p class="scaffold-tip">${esc(info.scaffold[Math.min(2, (info.scaffold.length - 1))] || info.scaffold[0])}</p>` : '';
+    const record = currentPartState().last?.record || {};
+    const support = a.saveFailed ? null : R.supportFor?.(stage,curPart().id,record,a,errorCount());
+    if (support) { hintLevel = Math.max(hintLevel,support.level); currentPartState().hintMax = Math.max(currentPartState().hintMax || 0,hintLevel); }
+    const sc = support ? `<p class="scaffold-tip"><b>第 ${support.level} 步帮助：</b>${esc(support.text)}</p>` : '';
     fb.innerHTML = `<p>${esc(a.feedback)}</p>${tagLine}${sc}<p class="note">改一改再检查，所有尝试都会记录，不扣分。当前 ${esc(sum.starGlyphs || R.starGlyphs(sum.stars))}。</p>`;
-    if (retryFocus) setFocus(retryFocus, '从这里改');
-    say('再想一想', teachGuide() ? '对照上面的错因，改完再试' : '可以点右上角“?”要提示');
+    const target = supportTarget(support?.target);
+    if (target || retryFocus) setFocus(target || retryFocus, a.saveFailed ? '保留作品，再试保存' : '从这里改');
+    say(a.saveFailed ? '还没有保存成功' : support?.text || '再看一看当前步骤', a.saveFailed ? '作品已保留，请稍后再试' : '按提示改完，再由你检查');
   }
   updateLeaveButton();
+}
+function supportTarget(target) {
+  if (!target) return null;
+  if (target.kind === 'group') return $(target.id);
+  if (target.kind === 'row') {
+    const row=$('composer')?.querySelector(`.step-row[data-i="${target.row}"]`);
+    const selector={verb:'.verbs',obj:'.objs',method:'.methods'}[target.field];
+    return (selector&&row?.querySelector(selector)) || row;
+  }
+  if (target.kind === 'flow') return $('chart')?.querySelector(`.fbox[data-id="${target.id}"]`);
+  if (target.kind === 'shape') return $('chart')?.querySelector(`.sp[data-id="${target.id}"]`)?.closest('.shape-pick');
+  if (target.kind === 'rule') return target.id==='sign'?$('sign'):$({a:'va',b:'vb'}[target.id])?.closest('.stepper');
+  return target.kind==='ops'?$('opsPool'):target.kind==='reason'?$('why'):null;
 }
 function renderStageSummary() {
   const meta = R.stageOf(stage), sum = summaryOf(stage);
@@ -439,7 +488,7 @@ function renderStageSummary() {
          </div>`
       : `<p class="note">还差 ${esc('★'.repeat(Math.max(1, R.PASS_STARS - sum.stars)))} 才能离开校园地图。</p>
          ${miss.length ? `<p>还缺：<b>${esc(miss.join('、'))}</b></p>` : ''}
-         <p class="encourage">别着急，改完再检查。第 2 次进站会打开更清楚的教学引导。</p>
+         <p class="encourage">别着急，改完再检查。连续尝试后会给你更具体的一步提示，也可重看学习资料。</p>
          <button type="button" class="go-btn" id="keepTrying">继续完成 →</button>
          <button type="button" class="ghost-btn" id="backMap" disabled title="未达 2 星不能离开">回地图（需≥${R.PASS_STARS}星）</button>`}
   </div>`;
@@ -559,7 +608,7 @@ function partTempOrder() {
   $('check').onclick = async () => {
     const a = await submitPart({ ops: d.ops.slice(), reason: d.reason, tries: d.tries });
     feedback(a, $('opsClear'));
-    if (!a.ok && d.ops[0] !== 'sub32') { d.ops = []; d.shown = false; draw(); }
+
   };
   draw();
   say('先排三个运算，再算一算');
@@ -585,7 +634,7 @@ function partSteps(pid, opts = {}) {
       <div class="composer" id="composer"></div>
       <div class="runner">
         <div class="card-preview"><b>我的方法卡</b><ol id="preview"></ol></div>
-        ${handSpec ? `<div class="hand" id="hand"><b>${handSpec.label}</b> ${handSpec.fields.map(([k, l, u]) => `<label>${l}<input data-k="${k}" inputmode="decimal" value="${esc(d.hand[k] ?? '')}" maxlength="6">${u}</label>`).join(' ')}</div>` : ''}
+        ${handSpec ? `<div class="hand" id="hand"><b>${handSpec.label}（可选手算）</b> ${handSpec.fields.map(([k, l, u]) => `<label>${l}<input data-k="${k}" inputmode="decimal" value="${esc(d.hand[k] ?? '')}" maxlength="6">${u}</label>`).join(' ')}</div>` : ''}
         <button type="button" class="go-btn" id="run">请同桌照着做</button>
         <div class="peer"><img id="peerImg" src="${sprite('femaleAdventurer', 'idle')}" alt="" width="42" height="56"><div><b>同桌小安</b><ul id="trace" class="trace"></ul></div></div>
       </div>
@@ -618,14 +667,13 @@ function partSteps(pid, opts = {}) {
       const target = !r.verb ? row.querySelector('.v') : !r.obj ? row.querySelector('.o') : row.querySelector('.m');
       setFocus(target, !r.verb ? `第${i + 1}步做什么？` : !r.obj ? '对哪个数？' : '怎么算？');
       say(`写第 ${i + 1} 步`, '每步说清：做什么、对哪个数、怎么算');
-    } else if (!handReady()) { setFocus($('hand').querySelector('input'), '先自己算'); say('先自己按步骤算一算', '再请同桌验证'); }
+    }
     else { setFocus($('run'), '请同桌照着做'); say('写好了，请同桌照着做'); }
   };
-  const changed = () => { $('fb').innerHTML = ''; $('fb').className = 'feedback'; draw(); };
+  const changed = () => { draw(); };
   if ($('hand')) $('hand').querySelectorAll('input').forEach(inp => { inp.oninput = () => { d.hand[inp.dataset.k] = inp.value.trim(); if (!$('run').classList.contains('cta')) guide(); }; inp.onchange = guide; });
   $('run').onclick = async () => {
     if (d.rows.some(r => !rowDone(r)) && !d.rows.some(r => r.verb === 'think')) { guide(); return toast('还有步骤没写完'); }
-    if (!handReady()) { guide(); return toast('先自己算一算'); }
     if (pid === 'signin' && !ctx.rule) return toast('请先完成上一步：找规律');
     $('run').disabled = true;
     const record = { rows: d.rows.map(r => ({ ...r })), hand: handSpec ? { ...d.hand } : undefined, rule: ctx.rule || undefined, problem: stage === 'formula' ? pid : undefined };
@@ -688,7 +736,7 @@ const shapeBox = (shape, text, extra = '') => `<div class="fbox ${shape}" ${extr
 function partFlowFix() {
   const d = ui; d.marks = {}; d.open = null;
   $('body').innerHTML = `
-    <p class="focus-q">同学小周画的温度换算流程图有<b>3 处</b>问题。点图框，说出问题在哪。</p>
+    <p class="focus-q">同学小周画的温度换算流程图有<b>3 类问题，涉及 4 个位置</b>。点图框，说出问题在哪。</p>
     <div class="fix-split"><div id="chart" class="flowchart"></div><div id="fixed" class="flowchart ghost" hidden></div></div>
     <div class="part-actions"><button type="button" class="go-btn" id="check" hidden>检查</button></div>`;
   const draw = () => {
@@ -696,11 +744,11 @@ function partFlowFix() {
       <div class="fitem">${shapeBox(b.shape, b.text || '？', `data-id="${b.id}" role="button" tabindex="0"`)}
         ${d.marks[b.id] ? `<span class="mark ${d.marks[b.id] === 'none' ? 'okm' : ''}">${R.faultNames[d.marks[b.id]]}</span>` : ''}
         ${d.open === b.id ? `<div class="fault-pick">${Object.entries(R.faultNames).map(([k, t]) => `<button type="button" class="opt chip f" data-k="${k}">${t}</button>`).join('')}</div>` : ''}</div>`).join('');
-    $('chart').querySelectorAll('.fbox').forEach(el => { el.onclick = () => { d.open = el.dataset.id; sound.play('tap'); draw(); }; });
-    $('chart').querySelectorAll('.f').forEach(b => { b.onclick = e => { e.stopPropagation(); d.marks[d.open] = b.dataset.k; d.open = null; sound.play('tap'); draw(); }; });
+    $('chart').querySelectorAll('.fbox').forEach(el => { el.onclick = () => { d.open = el.dataset.id; sound.play('tap'); draw(); $('chart').querySelector('.fault-pick button')?.focus(); }; el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } }; });
+    $('chart').querySelectorAll('.f').forEach(b => { b.onclick = e => { e.stopPropagation(); const id = d.open; d.marks[id] = b.dataset.k; d.open = null; sound.play('tap'); draw(); $('chart').querySelector(`.fbox[data-id="${id}"]`)?.focus(); }; });
     const faults = Object.values(d.marks).filter(v => v !== 'none').length;
     if (d.open) setFocus($('chart').querySelector('.fault-pick .chip'), '这里有什么问题？');
-    else if (faults >= 3 || Object.keys(d.marks).length >= R.flawedFlow.length) { $('check').hidden = false; setFocus($('check'), '检查'); }
+    else if (faults >= 1 || Object.keys(d.marks).length >= R.flawedFlow.length) { $('check').hidden = false; setFocus($('check'), '检查'); }
     else { const nx = R.flawedFlow.find(b => !d.marks[b.id]); setFocus($('chart').querySelector(`.fbox[data-id="${nx ? nx.id : 'b0'}"]`), `已标出 ${faults} 处，点图框检查`); }
     say(`已标出 ${faults} 处`, '形状对吗？先后对吗？缺什么吗？');
   };
@@ -729,7 +777,7 @@ function partSeedsChain() {
       公式：m = n×2+1（第 n 小组的种子数），s = n×(3+m)÷2（一共的种子数）</p></div>
     <details class="aside"><summary>选看：s 的公式是怎么来的？</summary>
       <p>把这一堆种子（像梯形）复制一份倒过来，和原来的拼在一起，就成了每行都一样多的平行四边形：每行 (3+m) 粒，共 n 行。总数是它的一半：s = n×(3+m)÷2。</p></details>
-    <p class="focus-q">这次自己分析，不再有“三问”提示卡：</p>
+    <p class="focus-q">根据题目分析所求、已知和怎么求，需要时可以重看学习资料或点“?”：</p>
     <div class="qgrid">
       <div class="q"><b>所求（可多选）</b><div id="qAsk" class="chips-row"></div></div>
       <div class="q"><b>已知</b><div id="qKnown" class="chips-row"></div></div>
@@ -838,90 +886,139 @@ function partFormula() {
   $('repick').onclick = () => { ui = {}; partFormula(); };
 }
 
-/* ---------- 课堂检测 ---------- */
-async function renderQuiz() {
+/* ---------- 分层课堂检测 ---------- */
+function localGrade(question, answer) {
+  if (!question.type || question.type === 'choice') return Number.isInteger(answer) && answer === question.answer;
+  if (question.type === 'order') return Array.isArray(answer) && answer.length === question.answer.length && answer.every((id,i) => id === question.answer[i]);
+  return answer && !Array.isArray(answer) && Object.keys(answer).length === Object.keys(question.answer).length && new Set(Object.values(answer)).size === Object.keys(question.answer).length && Object.entries(question.answer).every(([key,value]) => answer[key] === value);
+}
+async function renderQuiz(requestedTier) {
+  const tier = requestedTier || exam?.tier || state?.currentExam?.tier || 'base';
   const page = $('quiz-page');
+  if (!exam && !quizResult && !isLocal && state?.currentExam) {
+    exam = state.currentExam;
+    if (requestedTier && requestedTier !== exam.tier) toast(exam.tier === 'challenge' ? '还有未完成的挑战，可以继续作答或先跳过挑战。' : '先完成当前基础检测，再选择挑战。');
+  }
   if (!exam && !quizResult) {
     setFocus(null);
-    page.innerHTML = '<p class="note" style="padding:40px;text-align:center">准备20题…</p>';
+    page.innerHTML = '<p class="note" style="padding:40px;text-align:center">准备'+(tier==='challenge'?'挑战':'基础')+'检测…</p>';
     try {
       if (isLocal) {
-        const q = await api('/api/teacher/answers');
-        const pick = R.targets ? Object.keys(R.targets).flatMap(t => shuffle(q.questions.filter(x => x.target === t)).slice(0, 5)) : [];
-        exam = { id: 'local', questions: pick.map(x => ({ id: x.id, target: x.target, goal: x.goal, level: x.level, prompt: x.prompt, options: x.options })), key: Object.fromEntries(pick.map(x => [x.id, x])) };
-      } else exam = await api('/api/exam/create', { method: 'POST', body: { sid: state.student.id, round: state.round } });
+        const data = await api('/api/teacher/answers');
+        const config = data.config;
+        if (!config?.[tier]) throw new Error('检测配置还没有准备好，请稍后重试。');
+        const pick = Object.keys(R.targets).flatMap(target => {
+          const pool=data.questions.filter(q=>q.target===target&&q.tier===tier&&!q.excludedFromNewDraw);
+          return shuffle([...(tier==='base'?pool.filter(q=>q.type!=='choice'):[]),...shuffle(pool.filter(q=>q.type==='choice')).slice(0,config[tier].choicePerTarget)]);
+        });
+        const questions=pick.map(q=>{
+          const view=structuredClone(q);
+          if (view.interaction?.rightItems) view.interaction.rightItems=shuffle(view.interaction.rightItems);
+          if (view.type==='order') view.interaction.initialOrder=shuffle(view.interaction.items).map(x=>x.id);
+          return view;
+        });
+        exam={id:uid(),tier,questions,key:Object.fromEntries(pick.map(q=>[q.id,q])),counts:{base:config.base.count,challenge:config.challenge.count},requiredPercent:config.passPercent};
+      } else {
+        exam = await api('/api/exam/create', {method:'POST',body:{sid:state.student.id,round:state.round,tier}});
+        state = await api('/api/me');
+      }
     } catch (e) { toast(e.message); show('map'); renderMap(); return; }
   }
   if (quizResult) return renderQuizResult();
-  const qs = exam.questions;
+  const qs=exam.questions, isChallenge=exam.tier==='challenge';
   setFocus(null);
-  page.innerHTML = `<div class="quiz-wrap">
-    <button type="button" class="ghost-btn" id="backMapQ">← 地图</button>
-    <h2>课堂检测 · 20题</h2>
-    <p class="note">每题标出它检测的学习目标。提交前可以改；提交后看错题解析。</p>
-    <div id="qList"></div>
-    <p id="unanswered" class="note"></p>
-    <button type="button" class="go-btn" id="submitQuiz">提交检测</button></div>`;
-  qs.forEach((q, i) => {
-    const item = document.createElement('div');
-    item.className = 'q-item';
-    item.innerHTML = `<p><b>${i + 1}.</b> <span class="tchip t-${q.target}">${esc(R.targets[q.target])}</span> ${esc(q.prompt)}</p><div class="card-options"></div>`;
-    q.options.forEach((opt, oi) => {
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'opt'; b.textContent = opt;
-      if (quizAnswers[q.id] === oi) b.setAttribute('aria-pressed', 'true');
-      b.onclick = () => { quizAnswers[q.id] = oi; item.querySelectorAll('.opt').forEach(x => x.setAttribute('aria-pressed', String(x === b))); updateUn(); };
-      item.querySelector('.card-options').appendChild(b);
-    });
-    $('qList').appendChild(item);
-  });
-  function updateUn() {
-    const miss = qs.map((q, i) => quizAnswers[q.id] === undefined ? i + 1 : null).filter(Boolean);
-    $('unanswered').textContent = miss.length ? `未答：${miss.join('、')}` : '已答完20题，可以提交';
-    if (!miss.length) setFocus($('submitQuiz'), '提交');
+  page.innerHTML=`<div class="quiz-wrap"><button type="button" class="ghost-btn" id="backMapQ">← 地图</button>
+    <h2>${isChallenge?'可选挑战':'基础检测'} · ${qs.length}题</h2>
+    <p class="note">${isChallenge?'挑战只加分，不影响基础达标；可以退出，已交的基础成绩会保留。':'提交前可以修改选择、步骤和配对；提交后再看解析。基础达到 '+UNLOCK_SCORE+'% 解锁奖励小游戏。'}</p>
+    <div id="qList"></div><p id="unanswered" class="note" role="status"></p>
+    <button type="button" class="go-btn" id="submitQuiz">提交${isChallenge?'挑战':'基础检测'}</button>
+    ${isChallenge?'<button type="button" class="ghost-btn" id="skipChallenge">跳过挑战，返回校园</button>':''}</div>`;
+  function updateUn(){
+    const miss=qs.map((q,i)=>answerComplete(q,quizAnswers[q.id])?null:i+1).filter(Boolean);
+    $('unanswered').textContent=miss.length?'尚未完成：'+miss.join('、'):'已完成 '+qs.length+' 题，可以提交。';
+    if (!miss.length) setFocus($('submitQuiz'),'提交检测');
   }
+  qs.forEach((q,i)=>{
+    const item=document.createElement('div');item.className='q-item';item.dataset.questionId=q.id;
+    item.innerHTML=`<p><b>${i+1}.</b> <span class="tchip t-${q.target}">${esc(R.targets[q.target])}</span> ${esc(q.prompt)}</p>${q.instruction?'<p class="note">'+esc(q.instruction)+'</p>':''}<div class="card-options"></div>`;
+    $('qList').append(item);mountQuestion(item.querySelector('.card-options'),q,quizAnswers,updateUn);
+  });
   updateUn();
-  $('backMapQ').onclick = () => { show('map'); renderMap(); };
-  $('submitQuiz').onclick = async () => {
-    if (qs.some(q => quizAnswers[q.id] === undefined)) return toast('还有未答的题');
+  const back=()=>{show('map');renderMap();};
+  $('backMapQ').onclick=back;
+  if($('skipChallenge')) $('skipChallenge').onclick=async()=>{
+    // Challenge is optional: leave it unanswered, while retaining the submitted base result.
+    if (!isLocal) {
+      try { await api('/api/exam/skip',{method:'POST',body:{sid:state.student.id,round:state.round,examId:exam.id}});state=await api('/api/me'); }
+      catch(e){toast(e.message);return;}
+    }
+    exam=null;quizResult=null;quizAnswers={};back();
+  };
+  $('submitQuiz').onclick=async()=>{
+    if (qs.some(q=>!answerComplete(q,quizAnswers[q.id]))) return toast('还有没有完成的题，先检查下方的未答编号。');
+    $('submitQuiz').disabled=true;
     try {
-      if (isLocal) {
-        const fb = qs.map(q => { const k = exam.key[q.id]; const chosen = quizAnswers[q.id]; return { ...k, chosen, correct: q.options[chosen] === k.options[k.answer], options: q.options, answer: q.options.indexOf(k.options[k.answer]) }; });
-        const byTarget = {}; fb.forEach(f => { byTarget[f.target] ||= { right: 0, total: 0 }; byTarget[f.target].total++; if (f.correct) byTarget[f.target].right++; });
-        quizResult = { score: fb.filter(f => f.correct).length * 5, byTarget, feedback: fb };
-      } else {
-        quizResult = await api('/api/exam/submit', { method: 'POST', body: { sid: state.student.id, round: state.round, examId: exam.id, answers: quizAnswers } });
-        state = await api('/api/me');
+      if(isLocal){
+        const feedback=qs.map(q=>({...exam.key[q.id],chosen:quizAnswers[q.id],correct:!!localGrade(exam.key[q.id],quizAnswers[q.id])}));
+        const right=feedback.filter(q=>q.correct).length,total=feedback.length,score=right/total*100,byTarget={};
+        feedback.forEach(q=>{byTarget[q.target]||={right:0,total:0};byTarget[q.target].total++;if(q.correct)byTarget[q.target].right++;});
+        quizResult={id:exam.id,tier:exam.tier,score,right,total,passed:!isChallenge&&score>=exam.requiredPercent,byTarget,feedback};
+        state.quizAttempts.push(quizResult);
+      }else{
+        quizResult=await api('/api/exam/submit',{method:'POST',body:{sid:state.student.id,round:state.round,examId:exam.id,answers:quizAnswers}});
+        state=await api('/api/me');
       }
-      sound.play('star'); renderQuizResult();
-    } catch (e) { toast(e.message); }
+      sound.play('star');renderHud();renderQuizResult();
+    }catch(e){toast(e.message);if($('submitQuiz'))$('submitQuiz').disabled=false;}
   };
 }
-function renderQuizResult() {
-  const r = quizResult, wrong = (r.feedback || []).filter(f => !f.correct);
-  $('quiz-page').innerHTML = `<div class="quiz-wrap">
-    <h2>得分 ${r.score} / 100</h2>
-    <div class="target-bars">${Object.entries(R.targets).map(([t, name]) => { const v = (r.byTarget || {})[t] || { right: 0, total: 0 }; return `<div class="tb"><span>${esc(name)}</span><i style="--w:${v.total ? 100 * v.right / v.total : 0}%"></i><b>${v.right}/${v.total}</b></div>`; }).join('')}</div>
-    <h3>错题解析</h3>
-    ${wrong.map(f => `<div class="wrong-item"><p><span class="tchip t-${f.target}">${esc(R.targets[f.target])}</span> ${esc(f.prompt)}</p>
-      <p>你的选择：${esc(f.options[f.chosen])}</p><p>正确答案：<b>${esc(f.options[f.answer])}</b></p><p class="explain">${esc(f.explanation)}</p></div>`).join('') || '<p>全对！</p>'}
-    ${rewardUnlocked(state?.quizAttempts)
-      ? '<button type="button" class="go-btn" id="toReward">🎮 奖励已解锁：算力工厂</button>'
-      : `<p class="note">课堂检测满 ${UNLOCK_SCORE} 分可解锁奖励小游戏「算力工厂」。</p>`}
-    <button type="button" class="go-btn" id="retake">再测一次（换一组题）</button>
-    <button type="button" class="ghost-btn" id="backMapR">回地图</button></div>`;
-  $('retake').onclick = () => { exam = null; quizResult = null; quizAnswers = {}; renderQuiz(); };
-  $('backMapR').onclick = () => { show('map'); renderMap(); };
-  if ($('toReward')) { $('toReward').onclick = enterReward; setFocus($('toReward'), '检测达标，奖励已解锁'); }
-  else setFocus($('backMapR'), '首次和最近成绩都会保留');
+function readableAnswer(q, value) {
+  if (value == null) return '未作答';
+  if (!q.type || q.type==='choice') return q.options[value] ?? '未作答';
+  if (q.type==='order') return Array.isArray(value)?value.map(id=>q.interaction.items.find(x=>x.id===id)?.text||id).join(' → '):'未完成排序';
+  return q.interaction.leftItems.map(left=>left.text+' → '+(q.interaction.rightItems.find(right=>right.id===value[left.id])?.text||'未配对')).join('；');
+}
+function renderQuizResult(){
+  const result=quizResult,challenge=result.tier==='challenge',wrong=(result.feedback||[]).filter(q=>!q.correct);
+  const baseDone=isLocal?state.quizAttempts.some(q=>q.tier==='base'):state.examStatus?.baseCompleted;
+  const attempts=(state.quizAttempts||[]).filter(q=>q.tier===result.tier&&q.paperVersion===result.paperVersion);
+  const first=attempts.at(0),latest=attempts.at(-1);
+  $('quiz-page').innerHTML=`<div class="quiz-wrap"><h2>${challenge?'可选挑战':'基础检测'}：${result.right} / ${result.total} 题</h2>
+    <p class="result-score">${Number(result.score.toFixed(2))}%${challenge?' · 挑战只加分，不改变基础达标状态':result.passed?' · 基础达标':' · 可以回到学习资料，再试一试'}</p>
+    ${first?'<p class="note">本层首次 '+Number(first.score.toFixed(2))+'%；最近 '+Number(latest.score.toFixed(2))+'%。</p>':''}
+    <div class="target-bars">${Object.entries(R.targets).map(([id,name])=>{const v=result.byTarget?.[id]||{right:0,total:0};return `<div class="tb"><span>${esc(name)}</span><i style="--w:${v.total?100*v.right/v.total:0}%"></i><b>${v.right}/${v.total}</b></div>`;}).join('')}</div>
+    ${!challenge&&baseDone?'<button type="button" class="go-btn" id="startChallenge">基础已完成，选做挑战</button><button type="button" class="ghost-btn" id="skipChallengeResult">跳过挑战，返回校园</button>':''}
+    ${rewardReady()?'<button type="button" class="go-btn" id="toReward">进入奖励小游戏</button>':'<p class="note">基础达到 '+UNLOCK_SCORE+'% 即可解锁奖励；挑战不补足基础分数。</p>'}
+    <button type="button" class="ghost-btn" id="retake">再做一份基础检测</button>
+    <button type="button" class="ghost-btn" id="backMapR">返回校园</button>
+    <h3>核对方法，回到学习</h3>
+    ${wrong.map(q=>`<div class="wrong-item"><p><span class="tchip t-${q.target}">${esc(R.targets[q.target])}</span> ${esc(q.prompt)}</p><p>你的作答：${esc(readableAnswer(q,q.chosen))}</p><p>参考方法：<b>${esc(readableAnswer(q,q.answer))}</b></p><p class="explain">${esc(q.explanation)}</p><button type="button" class="ghost-btn review-learning" data-stage="${{G1:'temp',G2:'temp',K1:'seeds',K2:'flow'}[q.target]||'temp'}">重看对应学习资料</button></div>`).join('')||'<p>本层全部完成正确。</p>'}</div>`;
+  const start=tier=>{exam=null;quizResult=null;quizAnswers={};renderQuiz(tier);};
+  $('retake').onclick=()=>start('base');
+  const back=()=>{show('map');renderMap();};$('backMapR').onclick=back;
+  if($('startChallenge'))$('startChallenge').onclick=()=>start('challenge');
+  if($('skipChallengeResult'))$('skipChallengeResult').onclick=back;
+  if($('toReward'))$('toReward').onclick=enterReward;
+  document.querySelectorAll('.review-learning').forEach(button=>button.onclick=()=>openLearning(button.dataset.stage,{student:state.student,round:state.round}));
+  setFocus($('backMapR'),'基础成绩会保留，挑战可以选做');
 }
 
-/* ---------- 奖励小游戏（课堂检测 80 分以上解锁） ---------- */
-function enterReward() {
-  // 教师测试（/test、/demo）免解锁，便于课前预览；学生端必须达标
-  if (!isLocal && !rewardUnlocked(state?.quizAttempts)) return toast(`课堂检测满 ${UNLOCK_SCORE} 分才能进入奖励游戏`);
-  show('reward');
-  openReward($('reward'), { onExit: () => { show('map'); renderMap(); } });
+/* ---------- 服务端基础达标后的奖励 ---------- */
+async function enterReward(){
+  if(!isLocal){
+    try{
+      const status=await api('/api/reward/status');
+      state.examStatus={...state.examStatus,...status,rewardUnlocked:!!status.unlocked};renderHud();
+      if(!status.unlocked)return toast('基础检测达到 '+status.requiredPercent+'% 后即可进入奖励。');
+    }catch(e){toast(e.message);return;}
+  }
+  if (rpg) { try { rpg.destroy(); } catch {} rpg = null; }
+  show('reward');setFocus(null);
+  const root=$('reward'),back=()=>{show('map');renderMap();};
+  root.innerHTML=`<div class="memory-wrap"><button type="button" class="ghost-btn" id="rewardBack">← 返回校园</button><h1>接待任务小憩</h1><p>${isLocal?'教师预览 · 不写入班级记录':'基础检测已达标。可以用小游戏再复习一下。'}</p><div class="reward-choices"><button type="button" class="go-btn" id="rewardMemory">算法搭档配对</button><button type="button" class="ghost-btn" id="rewardFactory">算力工厂</button></div><p class="note">配对没有倒计时，不扣生命；随时可以返回校园。</p></div>`;
+  $('rewardBack').onclick=back;
+  $('rewardMemory').onclick=()=>openMemoryReward(root,{onExit:back});
+  $('rewardFactory').onclick=()=>openReward(root,{onExit:back});
 }
 
 /* ---------- HUD 事件 ---------- */
@@ -935,15 +1032,19 @@ $('help').onclick = () => {
   hintLevel = Math.min(3, hintLevel + 1);
   sound.play('hint'); spotlight(2200);
   const info = PARTS[stage + '.' + curPart().id];
-  const pool = teachGuide() && info.scaffold && info.scaffold.length ? info.scaffold : info.hints;
-  const tip = pool[hintLevel - 1] || pool[pool.length - 1] || '看发光的地方';
+  const pool = info.scaffold?.length ? info.scaffold : info.hints;
+  const last = currentPartState().last;
+  const support = last?.assessment?.ok === false ? R.supportFor?.(stage,curPart().id,last.record,last.assessment,Math.max(hintLevel,errorCount())) : null;
+  const tip = support?.text || pool[hintLevel - 1] || pool[pool.length - 1] || '看当前操作区域';
+  const target=supportTarget(support?.target);if(target)setFocus(target,'按这一步修改');
+  if (currentPartState().last) currentPartState().hintMax=Math.max(currentPartState().hintMax||0,hintLevel);
   say(`${teachGuide() ? '引导' : '提示'} ${hintLevel}：${tip}`, hintLevel < 3 ? '还需要可以再点“?”' : '');
   $('say-sub').className = 'hint';
 };
 $('switch').onclick = async () => {
   if (!confirm('切换学生？已提交的记录都已保存。')) return;
   try { if (!isLocal) await api('/api/logout', { method: 'POST', body: {} }); } catch {}
-  state = null; if (rpg) { try { rpg.destroy(); } catch {} rpg = null; } show('login'); setupLogin();
+  state = null; exam = null; quizResult = null; quizAnswers = {}; if (rpg) { try { rpg.destroy(); } catch {} rpg = null; } show('login'); setupLogin();
 };
 $('fresh').onclick = () => { if (screen === 'level') startPart(); };
 $('hud-avatar').onclick = () => {
@@ -971,7 +1072,11 @@ async function boot() {
   if (mode === 'student') {
     try { state = await api('/api/me'); character = pickCharacter(state.student.id); await enterCampus(); }
     catch { show('login'); }
-    setInterval(() => flushQueue().then(n => { if (n === 0) setSync('已补传完成'); }).catch(() => {}), 8000);
+    setInterval(() => {
+      if (!state) return;
+      const identity = { sid: state.student.id, round: state.round };
+      flushQueue(identity).then(n => { if (n === 0 && state?.student.id === identity.sid && state.round === identity.round) setSync('已补传完成'); }).catch(() => {});
+    }, 8000);
   } else show('login');
 }
 window.__enterPlace = id => enterPlace(id);

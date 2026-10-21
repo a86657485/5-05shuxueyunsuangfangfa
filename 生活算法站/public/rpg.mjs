@@ -521,6 +521,7 @@ export async function mountRpg(host, opts) {
 
   const onKey = e => {
     if (!running) return;
+    if (!host.isConnected || host.closest('[hidden]')) { keys.clear(); return; }
     if (document.body.classList.contains('story-open')) { keys.clear(); return; }
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Spacebar'].includes(e.key) || /^[wasdWASD]$/.test(e.key)) {
       e.preventDefault();
