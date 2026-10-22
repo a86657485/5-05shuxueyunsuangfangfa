@@ -42,6 +42,22 @@ tr.idle td{color:#6f8299}
 .okt{color:#4ecb8d;font-weight:800}.badt{color:#ff9a8a;font-weight:800}
 .tag{display:inline-block;background:#3a2030;color:#ffb4b4;border-radius:6px;padding:2px 6px;margin:2px;font-size:12px}
 
+/* 各站星星 */
+.star-line{display:grid;grid-template-columns:160px 1fr 60px;gap:8px;align-items:center;margin:-3px 0 9px;font-size:12px;color:#8ea3ba}
+.star-line .starcount{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.star-line .starcount b{font-weight:700;margin-right:2px}
+.star-line .starcount b.s3{color:#ffd166}
+.star-line .starcount b.s2{color:#7eb6ff}
+.star-line .starcount b.s1{color:#8fa3bb}
+.star-line .starcount b.s0{color:#5b6f85}
+.star-total{color:#ffd166}
+.stars-cell{white-space:nowrap;letter-spacing:-1px;font-size:12px}
+.stars-cell .sg{display:inline-block;margin-right:7px}
+.stars-cell .sg.n3{color:#ffd166}
+.stars-cell .sg.n2{color:#7eb6ff}
+.stars-cell .sg.n1{color:#8fa3bb}
+.stars-cell .sg.n0{color:#4a5d73}
+
 /* ⑥ 各站标准答案 */
 .ansbox{border:1px solid #2a3f5c;border-radius:10px;margin:8px 0;background:#0f1b2d}
 .ansbox>summary{cursor:pointer;padding:9px 12px;font-weight:700;color:#cfe0ee;font-size:14px}

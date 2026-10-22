@@ -10,6 +10,8 @@ const dash = document.getElementById('dash');
 let classId = '501', data = null, query = '', syncError = '';
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pct = (n, d) => d ? Math.round(100 * n / d) : 0;
+/** 某学生某站已得星数（0–3） */
+const starsOf = (s, id) => { const n = Number(s.records?.[id]?.summary?.stars); return Number.isFinite(n) ? Math.max(0, Math.min(3, n)) : 0; };
 const tchips = ts => ts.map(t => `<span class="tchip t-${t}">${t}</span>`).join('');
 const WAS = { answer: '算法就是答案', order: '顺序无所谓', vague: '步骤写个大概', shape: '图框随便画', knew: '原来就明白' };
 const NOW = { method: '算法是方法，换数也能用', order: '顺序影响结果', clear: '每步写清', flow: '流程图顺序一目了然' };
@@ -45,12 +47,17 @@ function render() {
   const avg = arr => arr.length ? Math.round(arr.reduce((x, y) => x + y, 0) / arr.length) : null;
   const q0 = avg(quized.map(s => tierAttempts(s, 'base')[0].score)), q1 = avg(quized.map(s => tierAttempts(s, 'base').at(-1).score));
 
-  // ① 各站进度
+  // ① 各站进度 + 星星分布
   const prog = R.stages.map(st => {
     const done = students.filter(s => s.records?.[st.id]?.summary?.pass).length;
     const going = students.filter(s => !s.records?.[st.id]?.summary?.pass && s.records?.[st.id]?.summary?.started).length;
-    return { st, done, going, none: N - done - going };
+    const bucket = [0, 0, 0, 0];
+    for (const s of students) bucket[starsOf(s, st.id)] += 1;
+    const total = bucket.reduce((acc, c, i) => acc + c * i, 0);
+    return { st, done, going, none: N - done - going, bucket, stars: total, avg: N ? total / N : 0 };
   });
+  const starTotal = prog.reduce((acc, p) => acc + p.stars, 0);
+  const starMax = N * R.requiredIds.length * 3;
   // ② 证据点首答 vs 最终（分母=提交过该证据点的学生）
   const partRows = R.stages.flatMap(st => st.parts.filter(p => !p.selfCheck).map(p => {
     const subs = students.map(s => s.records?.[st.id]?.parts?.[p.id]).filter(x => x && x.first);
@@ -93,10 +100,15 @@ function render() {
   </div>
   <p class="muted exam-state">本班检测：${data?.examClosed ? '已关闭' : '按必做站完成情况自动开放'}。基础达80%解锁奖励；挑战自选，不能弥补基础不足。${challenge.length}人已交挑战，${legacy.length}人保留旧版整卷记录。</p>
   <div class="grid">
-    <section class="panel"><h2>① 各站进度</h2>
+    <section class="panel"><h2>① 各站进度与星星</h2>
       ${N ? prog.map(p => `<div class="stack-row"><span class="lbl">${esc(p.st.short)}${p.st.optional ? '（选做）' : ''}</span>
         <div class="stack"><span class="s-done" style="width:${pct(p.done, N)}%"></span><span class="s-going" style="width:${pct(p.going, N)}%"></span></div>
-        <span class="num">${p.done}/${N}</span></div>`).join('') + '<div class="legend"><i class="cd"></i>完成<i class="cg"></i>进行中<i class="cn"></i>未开始</div>' : '<p class="muted">尚无证据</p>'}
+        <span class="num">${p.done}/${N}</span></div>
+        <div class="star-line"><span class="lbl"></span>
+          <span class="starcount"><b class="s3">3★</b>${p.bucket[3]}<b class="s2">2★</b>${p.bucket[2]}<b class="s1">1★</b>${p.bucket[1]}<b class="s0">0★</b>${p.bucket[0]}</span>
+          <span class="num">均 ${p.avg.toFixed(1)}★</span></div>`).join('')
+        + `<div class="legend"><i class="cd"></i>完成<i class="cg"></i>进行中<i class="cn"></i>未开始</div>
+           <p class="muted small">全班星星合计 <b class="star-total">${starTotal}</b> / 满额 ${starMax}（每站每人 3 颗）</p>` : '<p class="muted">尚无证据</p>'}
     </section>
     <section class="panel"><h2>② 证据点：首答 vs 最终正确率</h2>${pairBars(partRows.filter(r => r.n), { a: '首答', b: '最终' }) }</section>
     <section class="panel"><h2>③ 误解：首次出现 vs 仍未纠正（人数）</h2>${pairBars(misRows, { a: '首次出现', b: '仍未纠正' })}
@@ -112,8 +124,8 @@ function render() {
   </div>
   <section class="panel" style="margin-top:12px">
     <h2>学生明细 <input id="q" placeholder="查姓名（只筛选下表，不改变上方统计）" value="${esc(query)}"></h2>
-    <table><thead><tr><th>姓名</th><th>当前位置</th><th>主线</th><th>首答正确</th><th>尝试</th><th>最高帮助</th><th>仍未纠正的误解</th><th>签到方法卡（最终）</th><th>基础 / 挑战 / 旧版（首→近）</th><th>最近同步</th></tr></thead>
-      <tbody>${list.map(row).join('') || '<tr><td colspan="10" class="muted">尚无证据</td></tr>'}</tbody></table>
+    <table><thead><tr><th>姓名</th><th>当前位置</th><th>主线</th><th>各站星星</th><th>首答正确</th><th>尝试</th><th>最高帮助</th><th>仍未纠正的误解</th><th>签到方法卡（最终）</th><th>基础 / 挑战 / 旧版（首→近）</th><th>最近同步</th></tr></thead>
+      <tbody>${list.map(row).join('') || '<tr><td colspan="11" class="muted">尚无证据</td></tr>'}</tbody></table>
     <p class="muted">更新于 ${data?.at ? new Date(data.at).toLocaleTimeString('zh-CN') : '—'} · 每5秒自动刷新 · 带*为名单外手动登录</p>
   </section>`;
   dash.querySelectorAll('#classes button').forEach(b => { b.onclick = () => { classId = b.dataset.c; load(); }; });
@@ -156,7 +168,9 @@ function row(s) {
   return `<tr class="${started ? '' : 'idle'}">
     <td>${esc(s.student.name)}${s.student.manual ? '*' : ''}</td>
     <td>${s.lessonExpired ? '上一课次（只读，请开新一轮）' : started ? (cur ? `${esc(R.stageOf(cur).short)}·${esc(curPart || '')}` : '主线完成') : '未开始'}</td>
-    <td>${done}/${R.requiredIds.length}</td><td>${graded ? `${firstOk}/${graded}` : '—'}</td><td>${tries || '—'}</td><td>${hint || '—'}</td>
+    <td>${done}/${R.requiredIds.length}</td>
+    <td class="stars-cell">${R.requiredIds.map(id => { const n = starsOf(s, id); return `<span class="sg n${n}" title="${esc(R.stageOf(id).short)}：${n} 星">${R.starGlyphs(n)}</span>`; }).join('')}</td>
+    <td>${graded ? `${firstOk}/${graded}` : '—'}</td><td>${tries || '—'}</td><td>${hint || '—'}</td>
     <td>${tags.map(t => `<span class="tag">${esc((R.misconceptions[t] || t).slice(0, 12))}</span>`).join('') || '—'}</td>
     <td class="cardtxt">${card ? `<span class="${card.assessment.ok ? 'okt' : 'badt'}">${card.assessment.ok ? '✓' : '✗'}</span> ${esc(cardText)}` : '—'}</td>
     <td class="quiz-tiers">基础 ${scorePair(tierAttempts(s, 'base'))}<br>挑战 ${scorePair(tierAttempts(s, 'challenge'))}<br>旧版 ${scorePair(tierAttempts(s, 'legacy'))}</td>
