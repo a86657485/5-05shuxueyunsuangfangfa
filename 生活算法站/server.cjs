@@ -391,12 +391,19 @@ function createService(options = {}) {
 }
 
 function lanAddresses() {
+  // 代理/虚拟网卡（Clash、VPN、虚拟机）不是学生能访问的地址，必须排除
+  const skipName = /^(docker|br-|veth|utun|awdl|llw|bridge|vmnet|lo|clash|tun|tap|wg|tailscale|zerotier|vethernet)/i;
+  const skipIp = ip => /^(198\.1[89]\.|169\.254\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|0\.)/.test(ip);
+  const rank = ip => (ip.startsWith('10.') ? 0 : /^192\.168\./.test(ip) ? 1 : /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ? 2 : 3);
   const out = [];
   for (const [name, nets] of Object.entries(os.networkInterfaces())) {
-    if (/^(docker|br-|veth|utun|awdl|llw|bridge|vmnet|lo)/.test(name)) continue;
-    for (const net of nets || []) if (net.family === 'IPv4' && !net.internal) out.push(net.address);
+    if (skipName.test(name)) continue;
+    for (const net of nets || []) {
+      if (net.family !== 'IPv4' || net.internal || skipIp(net.address)) continue;
+      out.push(net.address);
+    }
   }
-  return out;
+  return out.sort((a, b) => rank(a) - rank(b));
 }
 
 if (require.main === module) {
