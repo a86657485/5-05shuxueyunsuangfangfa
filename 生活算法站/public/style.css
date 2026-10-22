@@ -516,6 +516,9 @@ a.cta{background:linear-gradient(180deg,#ffe28f,#ffc94a)!important;color:#1c2a3a
 .skin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px;padding:0 18px 6px}
 .skin-card{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;background:#fff;border:2px solid var(--line);border-radius:14px;min-height:0}
 .skin-card img{width:72px;height:96px;object-fit:contain}
+.skin-card img.portrait{width:92px;height:92px;border-radius:10px}
+.hud-avatar{background:#fff}
+.hud-avatar img.portrait{width:34px;height:34px;border-radius:7px}
 .skin-card b{font-size:13px;font-weight:700;line-height:1.2;text-align:center}
 .skin-card small{font-size:11px;color:var(--muted)}
 .skin-card.current{border-color:var(--mint);background:#e8f7f2;box-shadow:0 0 0 2px rgba(42,157,143,.25) inset}

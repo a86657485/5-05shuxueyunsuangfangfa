@@ -111,6 +111,21 @@ describe('换装奖励：素材齐备', () => {
     }
   });
 
+  it('八款奖励装扮都有专属立绘，体积可控', async () => {
+    const M = await load();
+    const ids = M.catalog({ awards: [], records: {} }).filter(s => s.stage).map(s => s.id);
+    assert.equal(ids.length, 8);
+    let total = 0;
+    for (const id of ids) {
+      assert.equal(M.portraitFor(id), `/assets/skins/portrait_${id}.png`);
+      const file = path.join(base, 'public', 'assets', 'skins', `portrait_${id}.png`);
+      assert.ok(fs.existsSync(file), `缺少立绘 ${id}`);
+      total += fs.statSync(file).size;
+    }
+    assert.ok(total < 1.2 * 1024 * 1024, '立绘总量应小于 1.2MB');
+    assert.equal(M.portraitFor('maleAdventurer'), null, '默认形象沿用原精灵');
+  });
+
   it('新角色与原角色同尺寸（同风格，不改绘制比例）', async () => {
     const size = file => {
       const b = fs.readFileSync(path.join(dir, file));

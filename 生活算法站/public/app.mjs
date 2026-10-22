@@ -12,7 +12,7 @@ import { TEST_ANSWERS } from './answers.mjs';
 import { openReward } from './reward.mjs';
 import { UNLOCK_SCORE } from './reward-rules.mjs';
 import { openLearning } from './learning.mjs';
-import { openSkinPicker, starSnapshot, newlyUnlocked, loadRemembered, rememberFromState } from './skins.mjs';
+import { openSkinPicker, starSnapshot, newlyUnlocked, loadRemembered, rememberFromState, portraitFor } from './skins.mjs';
 import { mountQuestion, answerComplete } from './quiz-ui.mjs';
 import { openMemoryReward } from './memory-reward.mjs';
 
@@ -171,7 +171,10 @@ function renderHud() {
   }
   const rb = $('reward-btn');
   if (rb) rb.hidden = !rewardReady();
-  $('hud-avatar-img').src = sprite(character, 'idle');
+  const portrait = portraitFor(character);
+  const avatarImg = $('hud-avatar-img');
+  avatarImg.src = portrait || sprite(character, 'idle');
+  avatarImg.classList.toggle('portrait', !!portrait);
   const avatarBtn = $('hud-avatar');
   if (avatarBtn) {
     let pending = false;

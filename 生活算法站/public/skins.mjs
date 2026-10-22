@@ -24,6 +24,10 @@ export const BASES = [
 export const skinId = (key, gender) => (gender === 'female' ? 'female' : 'male') + key;
 export const genderOf = id => (String(id || '').startsWith('female') ? 'female' : 'male');
 export const spriteFor = (id, pose = 'idle') => `/assets/kenney/characters/${id}_${pose}.png`;
+/** 奖励装扮另有专属立绘（头像/换装卡片用），地图上仍用同配色精灵 */
+export const portraitFor = id => SKINS.some(s => id === skinId(s.key, 'male') || id === skinId(s.key, 'female'))
+  ? `/assets/skins/portrait_${id}.png`
+  : null;
 
 /** 某站已得星数（优先用通关奖励里的记录，其次用当前回合小结） */
 export function starsOf(state, stage) {
@@ -43,16 +47,18 @@ export function isSkinUnlocked(state, skin, remembered = null) {
 
 /** 供界面渲染的清单：默认形象在前，奖励按关卡顺序，男女各一款 */
 export function catalog(state, remembered = null) {
-  const out = BASES.map(b => ({ id: b.id, name: b.name, gender: b.gender, stage: null, desc: '入学时的样子', unlocked: true }));
+  const out = BASES.map(b => ({ id: b.id, name: b.name, gender: b.gender, stage: null, desc: '入学时的样子', unlocked: true, portrait: null }));
   for (const skin of SKINS) {
     for (const gender of ['male', 'female']) {
+      const id = skinId(skin.key, gender);
       out.push({
-        id: skinId(skin.key, gender),
+        id,
         name: `${skin.name}·${gender === 'female' ? '女生' : '男生'}`,
         gender,
         stage: skin.stage,
         desc: skin.desc,
-        unlocked: isSkinUnlocked(state, skin, remembered)
+        unlocked: isSkinUnlocked(state, skin, remembered),
+        portrait: portraitFor(id)
       });
     }
   }
@@ -110,7 +116,7 @@ export function openSkinPicker({ state, current, remembered = null, onPick, onCl
   const card = s => `
     <button type="button" class="skin-card${s.unlocked ? '' : ' locked'}${s.id === current ? ' current' : ''}"
       data-id="${esc(s.id)}" ${s.unlocked ? '' : 'disabled'} aria-pressed="${s.id === current}">
-      <img src="${spriteFor(s.id)}" alt="${esc(s.name)}" width="72" height="96" loading="lazy">
+      <img src="${s.portrait || spriteFor(s.id)}" class="${s.portrait ? 'portrait' : 'sprite'}" alt="${esc(s.name)}" loading="lazy">
       <b>${esc(s.name)}</b>
       <small>${s.unlocked ? (s.stage ? '已解锁' : '默认可用') : `🔒 ${esc(STAGE_SHORT[s.stage] || '')} ${STAR_REQUIRED}★`}</small>
     </button>`;
