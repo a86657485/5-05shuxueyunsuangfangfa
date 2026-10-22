@@ -242,11 +242,15 @@ async function loadActors(character) {
   const custom = REWARD_SKINS.has(character);
   const dirs = ['down', 'left', 'right', 'up'];
   const frames = {};
-  await Promise.all(dirs.flatMap(d => [0, 1].map(async fr => {
-    frames[`${d}${fr}`] = await loadImage(custom
-      ? `/assets/pixel/skins/${character}_${d}${fr}.png`
-      : `/assets/pixel/${who}_${d}${fr}.png`);
-  })));
+  if (custom) {
+    // 奖励装扮：由立绘转出的专属小人，四个方向共用（尺寸各不相同）
+    const img = await loadImage(`/assets/pixel/skins/map/${character}.png`);
+    for (const d of dirs) for (const fr of [0, 1]) frames[`${d}${fr}`] = img;
+  } else {
+    await Promise.all(dirs.flatMap(d => [0, 1].map(async fr => {
+      frames[`${d}${fr}`] = await loadImage(`/assets/pixel/${who}_${d}${fr}.png`);
+    })));
+  }
   const npcs = {
     teacher: await loadImage('/assets/pixel/npc_teacher.png'),
     classmate: await loadImage('/assets/pixel/npc_classmate.png'),
@@ -473,7 +477,15 @@ export async function mountRpg(host, opts) {
     const psy = Math.floor(player.y * SCALE - cam.y);
     // 换装后两帧图相同，靠轻微起伏保留走路的生气
     const bob = player.moving ? Math.round(Math.sin(player.foot * Math.PI) * SCALE * 0.5) : 0;
-    if (pimg) ctx.drawImage(pimg, psx - 8 * SCALE, psy - 12 * SCALE + bob, 16 * SCALE, 16 * SCALE);
+    if (pimg) {
+      // 按原图比例绘制，专属小人比 16x16 高一些，不能拉伸
+      const ph = 16 * SCALE;
+      const pw = Math.round(ph * (pimg.width / pimg.height));
+      const smooth = ctx.imageSmoothingEnabled;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(pimg, Math.round(psx - pw / 2), Math.round(psy - 12 * SCALE + bob), pw, ph);
+      ctx.imageSmoothingEnabled = smooth;
+    }
 
     // near highlight ring
     if (nearId) {
