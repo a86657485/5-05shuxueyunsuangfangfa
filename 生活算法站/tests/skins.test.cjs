@@ -138,6 +138,30 @@ describe('换装奖励：素材齐备', () => {
   });
 });
 
+describe('换装奖励：地图角色同步', () => {
+  it('八款装扮各有 4 方向 × 2 帧的 16x16 地图精灵', () => {
+    const dir = path.join(base, 'public', 'assets', 'pixel', 'skins');
+    const ids = ['maleWeather', 'femaleWeather', 'maleFlow', 'femaleFlow', 'maleSeeds', 'femaleSeeds', 'maleSignin', 'femaleSignin'];
+    let count = 0;
+    for (const id of ids) for (const d of ['down', 'left', 'right', 'up']) for (const f of [0, 1]) {
+      const file = path.join(dir, `${id}_${d}${f}.png`);
+      assert.ok(fs.existsSync(file), `缺少地图精灵 ${id}_${d}${f}.png`);
+      const b = fs.readFileSync(file);
+      assert.equal(b.readUInt32BE(16), 16, `${id}_${d}${f} 宽度应为 16`);
+      assert.equal(b.readUInt32BE(20), 16, `${id}_${d}${f} 高度应为 16`);
+      count += 1;
+    }
+    assert.equal(count, 64);
+  });
+
+  it('地图按装扮取精灵，女生装扮不再用男生素材', () => {
+    const rpg = read('public/rpg.mjs');
+    assert.match(rpg, /assets\/pixel\/skins\//);
+    assert.match(rpg, /\/\^female\/\.test\(character\)/, '性别应以角色 id 判断');
+    assert.equal(/character === 'femaleAdventurer' \? 'girl' : 'boy'/.test(rpg), false, '旧的单角色判断应已替换');
+  });
+});
+
 describe('换装奖励：接入学生端', () => {
   it('学生端改用换装面板，角色表包含新装扮', () => {
     const app = read('public/app.mjs');

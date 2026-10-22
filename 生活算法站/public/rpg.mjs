@@ -235,12 +235,17 @@ async function loadTownTiles() {
   return imgs;
 }
 
+/* 四套奖励装扮有与立绘同配色的 16x16 地图精灵 */
+const REWARD_SKINS = new Set(['maleWeather', 'femaleWeather', 'maleFlow', 'femaleFlow', 'maleSeeds', 'femaleSeeds', 'maleSignin', 'femaleSignin']);
 async function loadActors(character) {
-  const who = character === 'femaleAdventurer' ? 'girl' : 'boy';
+  const who = /^female/.test(character) ? 'girl' : 'boy';
+  const custom = REWARD_SKINS.has(character);
   const dirs = ['down', 'left', 'right', 'up'];
   const frames = {};
   await Promise.all(dirs.flatMap(d => [0, 1].map(async fr => {
-    frames[`${d}${fr}`] = await loadImage(`/assets/pixel/${who}_${d}${fr}.png`);
+    frames[`${d}${fr}`] = await loadImage(custom
+      ? `/assets/pixel/skins/${character}_${d}${fr}.png`
+      : `/assets/pixel/${who}_${d}${fr}.png`);
   })));
   const npcs = {
     teacher: await loadImage('/assets/pixel/npc_teacher.png'),
@@ -466,7 +471,9 @@ export async function mountRpg(host, opts) {
     const pimg = actors.frames[`${player.dir}${fr}`];
     const psx = Math.floor(player.x * SCALE - cam.x);
     const psy = Math.floor(player.y * SCALE - cam.y);
-    if (pimg) ctx.drawImage(pimg, psx - 8 * SCALE, psy - 12 * SCALE, 16 * SCALE, 16 * SCALE);
+    // 换装后两帧图相同，靠轻微起伏保留走路的生气
+    const bob = player.moving ? Math.round(Math.sin(player.foot * Math.PI) * SCALE * 0.5) : 0;
+    if (pimg) ctx.drawImage(pimg, psx - 8 * SCALE, psy - 12 * SCALE + bob, 16 * SCALE, 16 * SCALE);
 
     // near highlight ring
     if (nearId) {
