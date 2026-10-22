@@ -13,7 +13,7 @@ import { openReward } from './reward.mjs';
 import { UNLOCK_SCORE } from './reward-rules.mjs';
 import { openLearning } from './learning.mjs';
 import { openSkinPicker, starSnapshot, newlyUnlocked, loadRemembered, rememberFromState, portraitFor } from './skins.mjs';
-import { mountQuestion, answerComplete } from './quiz-ui.mjs';
+import { mountQuestion, answerComplete, mountMatchReview } from './quiz-ui.mjs';
 import { openMemoryReward } from './memory-reward.mjs';
 
 const R = globalThis.LessonRules;
@@ -1013,7 +1013,7 @@ function renderQuizResult(){
     <button type="button" class="ghost-btn" id="retake">再做一份基础检测</button>
     <button type="button" class="ghost-btn" id="backMapR">返回校园</button>
     <h3>核对方法，回到学习</h3>
-    ${wrong.map(q=>`<div class="wrong-item"><p><span class="tchip t-${q.target}">${esc(R.targets[q.target])}</span> ${esc(q.prompt)}</p><p>你的作答：${esc(readableAnswer(q,q.chosen))}</p><p>参考方法：<b>${esc(readableAnswer(q,q.answer))}</b></p><p class="explain">${esc(q.explanation)}</p><button type="button" class="ghost-btn review-learning" data-stage="${{G1:'temp',G2:'temp',K1:'seeds',K2:'flow'}[q.target]||'temp'}">重看对应学习资料</button></div>`).join('')||'<p>本层全部完成正确。</p>'}</div>`;
+    ${wrong.map((q,i)=>`<div class="wrong-item"><p><span class="tchip t-${q.target}">${esc(R.targets[q.target])}</span> ${esc(q.prompt)}</p>${q.type==='match'?`<div class="match-review" data-i="${i}"></div>`:''}<p>你的作答：${esc(readableAnswer(q,q.chosen))}</p><p>参考方法：<b>${esc(readableAnswer(q,q.answer))}</b></p><p class="explain">${esc(q.explanation)}</p><button type="button" class="ghost-btn review-learning" data-stage="${{G1:'temp',G2:'temp',K1:'seeds',K2:'flow'}[q.target]||'temp'}">重看对应学习资料</button></div>`).join('')||'<p>本层全部完成正确。</p>'}</div>`;
   const start=tier=>{exam=null;quizResult=null;quizAnswers={};renderQuiz(tier);};
   $('retake').onclick=()=>start('base');
   const back=()=>{show('map');renderMap();};$('backMapR').onclick=back;
@@ -1021,6 +1021,8 @@ function renderQuizResult(){
   if($('skipChallengeResult'))$('skipChallengeResult').onclick=back;
   if($('toReward'))$('toReward').onclick=enterReward;
   document.querySelectorAll('.review-learning').forEach(button=>button.onclick=()=>openLearning(button.dataset.stage,{student:state.student,round:state.round}));
+  // 配对题：用连线回看对错（绿线=配对成功，红线=配对错误）
+  document.querySelectorAll('.match-review').forEach(box=>{const q=wrong[Number(box.dataset.i)];if(q&&q.type==='match')mountMatchReview(box,q,q.chosen);});
   setFocus($('backMapR'),'基础成绩会保留，挑战可以选做');
 }
 
@@ -1067,7 +1069,25 @@ $('switch').onclick = async () => {
   try { if (!isLocal) await api('/api/logout', { method: 'POST', body: {} }); } catch {}
   state = null; exam = null; quizResult = null; quizAnswers = {}; if (rpg) { try { rpg.destroy(); } catch {} rpg = null; } show('login'); setupLogin();
 };
-$('fresh').onclick = () => { if (screen === 'level') startPart(); };
+$('fresh').onclick = async () => {
+  if (screen !== 'level') return;
+  const name = R.stageOf(stage).short;
+  if (!confirm(`重新开始「${name}」？\n本站的作答记录与星级会清空，可以重新争取星星（该站积分也会重新计算）。`)) return;
+  try {
+    if (isLocal) {
+      state.records[stage] = { parts: {}, history: [], visits: 0 };
+      state.awards = (state.awards || []).filter(a => a.stage !== stage);
+      state.points = state.awards.reduce((n, a) => n + (Number(a.points) || 0), 0);
+    } else {
+      state = await api('/api/stage/reset', { method: 'POST', body: { sid: state.student.id, round: state.round, stage } });
+    }
+    $('menu').hidden = true;
+    ui = {}; hintLevel = 0; partIdx = 0;
+    renderHud();
+    startPart();
+    toast('本站已重新开始，可以重新争取星星');
+  } catch (e) { toast(e.message); }
+};
 $('hud-avatar').onclick = () => {
   try { localStorage.removeItem('g5l5-skin-new'); } catch {}
   $('hud-avatar').classList.remove('new-skin');

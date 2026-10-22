@@ -31,9 +31,60 @@ export function mountQuestion(host,q,answers,onChange) {
  }
  const mapping=answers[q.id]||{}, left=el('div','','quiz-pair-left'),right=el('div','','quiz-pair-right');
  const layout=el('div','','quiz-pair');
- q.interaction.leftItems.forEach(x=>{const partner=q.interaction.rightItems.find(y=>y.id===mapping[x.id]);const b=el('button',x.text+(partner?' → '+partner.text:''),'opt');b.type='button';b.setAttribute('aria-pressed',String(selected===x.id));b.onclick=()=>{selected=x.id;draw();onChange();host.querySelector('.quiz-pair-right button')?.focus();};left.append(b);});
- q.interaction.rightItems.forEach(x=>{const b=el('button',x.text,'opt quiz-shape '+(x.shape||''));b.type='button';b.disabled=!selected;b.onclick=()=>{answers[q.id]=assignPair(mapping,selected,x.id);selected=null;draw();onChange();const next=q.interaction.leftItems.findIndex(item=>!answers[q.id][item.id]);host.querySelectorAll('.quiz-pair-left button')[Math.max(0,next)]?.focus();};right.append(b);});
- layout.append(left,right);host.append(layout,el('p',selected?'再点右侧，完成这一对。':'先点左侧内容，再点右侧含义。已经配好也能重新选择。','note'));
- };
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+ svg.setAttribute('class','quiz-links');svg.setAttribute('aria-hidden','true');
+ q.interaction.leftItems.forEach(x=>{const b=el('button',x.text,'opt');b.type='button';b.dataset.left=x.id;b.setAttribute('aria-pressed',String(selected===x.id));b.onclick=()=>{selected=x.id;draw();onChange();host.querySelector('.quiz-pair-right button')?.focus();};left.append(b);});
+ q.interaction.rightItems.forEach(x=>{const b=el('button',x.text,'opt quiz-shape '+(x.shape||''));b.type='button';b.dataset.right=x.id;b.disabled=!selected;b.onclick=()=>{answers[q.id]=assignPair(mapping,selected,x.id);selected=null;draw();onChange();const next=q.interaction.leftItems.findIndex(item=>!answers[q.id][item.id]);host.querySelectorAll('.quiz-pair-left button')[Math.max(0,next)]?.focus();};right.append(b);});
+ layout.append(svg,left,right);host.append(layout,el('p',selected?'再点右侧，完成这一对。':'先点左侧内容，再点右侧含义，配好会连一条线。','note'));
+ requestAnimationFrame(()=>drawMatchLinks(layout,svg,mapping,q.answer));
+};
  draw();
+}
+
+const SVG_NS='http://www.w3.org/2000/svg';
+/**
+ * 在配对容器里画连线。
+ * 有标准答案时（提交后的回看）：配对成功=绿色，配错=红色；
+ * 答题过程中（q.answer 未下发）用虚线，不泄露对错。
+ */
+export function drawMatchLinks(pair,svg,mapping,answer) {
+ if(!pair||!svg) return;
+ const box=pair.getBoundingClientRect();
+ if(!box.width||!box.height) return;
+ svg.setAttribute('viewBox',`0 0 ${box.width} ${box.height}`);
+ svg.setAttribute('width',String(box.width));
+ svg.setAttribute('height',String(box.height));
+ svg.replaceChildren();
+ for(const [leftId,rightId] of Object.entries(mapping||{})){
+  const a=pair.querySelector(`[data-left="${leftId}"]`),b=pair.querySelector(`[data-right="${rightId}"]`);
+  if(!a||!b) continue;
+  const ra=a.getBoundingClientRect(),rb=b.getBoundingClientRect();
+  const line=document.createElementNS(SVG_NS,'line');
+  line.setAttribute('x1',String(ra.right-box.left));
+  line.setAttribute('y1',String(ra.top+ra.height/2-box.top));
+  line.setAttribute('x2',String(rb.left-box.left));
+  line.setAttribute('y2',String(rb.top+rb.height/2-box.top));
+  let cls='quiz-link pending';
+  if(answer) cls=answer[leftId]===rightId?'quiz-link ok':'quiz-link bad';
+  line.setAttribute('class',cls);
+  if(answer) line.setAttribute('aria-label',answer[leftId]===rightId?'配对成功':'配对错误');
+  svg.append(line);
+ }
+}
+
+/** 提交后的只读回看：绿线=配对成功，红线=配对错误 */
+export function mountMatchReview(host,q,chosen) {
+ if(!host||!q||q.type!=='match'||!q.interaction) return;
+ host.replaceChildren();
+ const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;n.className=cls||'';return n;};
+ const layout=el('div','','quiz-pair');
+ const svg=document.createElementNS(SVG_NS,'svg');
+ svg.setAttribute('class','quiz-links');
+ svg.setAttribute('aria-hidden','true');
+ const left=el('div','','quiz-pair-left'),right=el('div','','quiz-pair-right');
+ for(const x of q.interaction.leftItems){const b=el('button',x.text,'opt');b.type='button';b.disabled=true;b.dataset.left=x.id;left.append(b);}
+ for(const x of q.interaction.rightItems){const b=el('button',x.text,'opt quiz-shape '+(x.shape||''));b.type='button';b.disabled=true;b.dataset.right=x.id;right.append(b);}
+ layout.append(svg,left,right);
+ host.append(layout);
+ requestAnimationFrame(()=>drawMatchLinks(layout,svg,chosen||{},q.answer));
 }

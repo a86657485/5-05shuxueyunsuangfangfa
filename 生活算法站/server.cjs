@@ -273,6 +273,20 @@ function createService(options = {}) {
         save(data);
         return json(res, 200, data);
       }
+      if (p === '/api/stage/reset' && req.method === 'POST') {
+        // 学生重开本站：清空本站作答与星级，收回该站积分，可重新争取星星
+        const s = matchIdentity(req, body);
+        if (!stages.includes(body.stage)) fail(400, '未知关卡');
+        const data = state(s);
+        data.records[body.stage] = emptyStage();
+        data.awards = (data.awards || []).filter(a => a.stage !== body.stage);
+        data.points = data.awards.reduce((n, a) => n + (Number(a.points) || 0), 0);
+        for (const k of stages) data.records[k].summary = rules.stageSummary(k, data.records[k], data.awards.some(a => a.stage === k));
+        db.exec('BEGIN IMMEDIATE');
+        try { save(data); db.exec('COMMIT'); }
+        catch (e) { db.exec('ROLLBACK'); throw e; }
+        return json(res, 200, data);
+      }
       if (p === '/api/event' && req.method === 'POST') return json(res, 200, handleEvent(req, body));
       if (p === '/api/reward/status' && req.method === 'GET') {
         const s = signedStudent(req), status = state(s).examStatus;
