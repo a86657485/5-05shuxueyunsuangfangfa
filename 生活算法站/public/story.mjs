@@ -1,3 +1,6 @@
+/* 讲解窗口：要点逐条打字机出现，且至少停留 5 秒才可关闭 */
+import { typeLines, holdButtons, isHeld, canAnimate, dwellFor, CPS_STORY } from './typewriter.mjs';
+
 export const STORY = {
   intro: {
     title: '校园开放日，接待任务开始',
@@ -143,6 +146,8 @@ function createDialog() {
   actions.append(skip, next);
   dialog.append(layout, actions);
   for (const type of ['keydown', 'keyup']) dialog.addEventListener(type, event => event.stopPropagation());
+  // 保护期内不允许按 ESC 提前关闭讲解窗口
+  dialog.addEventListener('cancel', event => { if (isHeld()) event.preventDefault(); });
   dialog.addEventListener('close', () => finishStory());
   document.body.append(dialog);
 }
@@ -160,11 +165,20 @@ export function openStory(chapter, { student, round, once = false } = {}) {
   dialog.className = 'story-dialog';
   dialog.querySelector('.story-speaker').textContent = entry.speaker;
   dialog.querySelector('.story-title').textContent = entry.title;
+  const lines = Array.isArray(entry.text) ? entry.text : [entry.text];
   const text = dialog.querySelector('.story-text');
-  text.replaceChildren(...(Array.isArray(entry.text) ? entry.text : [entry.text]).map(line => {
-    const paragraph = document.createElement('p'); paragraph.textContent = line; return paragraph;
-  }));
-  dialog.querySelector('.story-task').textContent = '本次任务：' + entry.task;
+  text.replaceChildren(...lines.map(() => document.createElement('p')));
+  const paragraphs = [...text.children];
+  const taskEl = dialog.querySelector('.story-task');
+  const taskText = '本次任务：' + entry.task;
+  if (canAnimate()) {
+    // 逐段打字，任务句在正文讲完后出现
+    taskEl.textContent = '';
+    typeLines(paragraphs.map((p, i) => [p, lines[i]]), { cps: CPS_STORY }).then(() => { taskEl.textContent = taskText; });
+  } else {
+    paragraphs.forEach((p, i) => { p.textContent = lines[i]; });
+    taskEl.textContent = taskText;
+  }
   const image = dialog.querySelector('.story-image');
   image.hidden = false;
   dialog.querySelector('.story-figure').hidden = false;
@@ -172,6 +186,8 @@ export function openStory(chapter, { student, round, once = false } = {}) {
   image.src = entry.image;
   const next = dialog.querySelector('.story-continue');
   next.textContent = entry.action;
+  // 讲解窗口至少停留 5 秒：期间「跳过剧情」和继续按钮都不可用
+  holdButtons([dialog.querySelector('.story-skip'), next], dwellFor(paragraphs.map((p, i) => [p, lines[i]]), { cps: CPS_STORY }), { countdown: next });
   document.body.classList.add('story-open');
   try {
     dialog.showModal();

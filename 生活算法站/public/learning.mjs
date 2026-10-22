@@ -1,3 +1,6 @@
+/* 先学卡：要点逐条打字机出现，且至少停留 5 秒才可关闭 */
+import { typeLines, holdButtons, canAnimate, isHeld, dwellFor, CPS_CARD } from './typewriter.mjs';
+
 export const MATERIAL_VERSION = "v20261021";
 export const CARDS = {
   "temp": {
@@ -119,11 +122,25 @@ export function openLearning(stage, { student, round, once = false } = {}) {
  figure.append(image,fail,make('figcaption','教材第'+card.bookPage+'页'),zoom);
  const copy=make('div','','learning-copy');
  copy.append(make('h3','抓住这几个要点'));
- const list=make('ul','');card.explain.forEach(s=>list.append(make('li',s)));copy.append(list,make('h3',card.exampleTitle));
- const steps=make('ol','');card.exampleSteps.forEach(s=>steps.append(make('li',s)));copy.append(steps,make('p',card.next,'learning-next'));
+ const list=make('ul','');const items=card.explain.map(()=>{const li=make('li','');list.append(li);return li;});copy.append(list);
+ const exampleHead=make('h3',card.exampleTitle);
+ const steps=make('ol','');card.exampleSteps.forEach(s=>steps.append(make('li',s)));
+ const nextNote=make('p',card.next,'learning-next');
+ copy.append(exampleHead,steps,nextNote);
  body.append(figure,copy);const foot=make('footer','','learning-actions'),go=make('button','开始探究','go-btn');go.type='button';go.onclick=()=>dialog.close();foot.append(go);dialog.append(head,body,foot);
  document.body.append(dialog);
+ // 要点逐条打字，例子在要点讲完后才出现
+ if (canAnimate()) {
+   exampleHead.hidden=steps.hidden=nextNote.hidden=true;
+   typeLines(items.map((li,i)=>[li,card.explain[i]]),{cps:CPS_CARD}).then(()=>{exampleHead.hidden=steps.hidden=nextNote.hidden=false;});
+ } else {
+   items.forEach((li,i)=>{li.textContent=card.explain[i];});
+ }
+ // 讲解窗口至少停留 5 秒：关闭与「开始探究」在此期间不可用
+ holdButtons([close,go],dwellFor(items.map((li,i)=>[li,card.explain[i]]),{cps:CPS_CARD}),{countdown:go});
  active=new Promise(resolve=>{dialog.addEventListener('close',()=>{viewed.add(key);try{localStorage.setItem(key,'seen');}catch{} dialog.remove();active=null;if(trigger?.isConnected) trigger.focus();resolve();},{once:true});});
  ['keydown','keyup'].forEach(type=>dialog.addEventListener(type,e=>e.stopPropagation()));
- dialog.showModal();go.focus();return active;
+ // 保护期内不允许按 ESC 提前关闭
+ dialog.addEventListener('cancel',e=>{if(isHeld())e.preventDefault();});
+ dialog.showModal();if(!go.disabled)go.focus();return active;
 }
