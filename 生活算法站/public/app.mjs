@@ -446,7 +446,7 @@ function feedback(a, retryFocus) {
     const last = partIdx === R.stageOf(stage).parts.length - 1;
     fb.className = 'feedback ok';
     fb.innerHTML = `<p>${esc(a.feedback)}</p><p class="keypoint">要点：${esc(info.point)}</p>
-      <p class="stars">本站 ${esc(sum.starGlyphs || R.starGlyphs(sum.stars))}（通关 ≥${R.PASS_STARS} 星）</p>
+      <p class="stars">本站 ${esc(sum.starGlyphs || R.starGlyphs(sum.stars))}（通关 ≥${R.PASS_STARS} 星 · 首答正确率 ${Math.round((sum.checkRate || 0) * 100)}%，≥${Math.round(R.THREE_STAR_RATE * 100)}% 得三星）</p>
       <button type="button" class="go-btn" id="next">${last ? '查看本站结算 →' : '下一步 →'}</button>`;
     $('next').onclick = () => { if (last) startPart('summary'); else { partIdx++; startPart(); } };
     setFocus($('next'), last ? '看看星级与收获' : '进入下一步');

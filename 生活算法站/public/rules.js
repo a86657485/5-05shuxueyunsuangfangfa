@@ -512,8 +512,24 @@
   }
 
   /* 星级：按证据点最终通过比例 + 首答质量。通关门槛 = ≥2 星。
-   * 0：未过半；1：过半但未全过；2：全部最终通过（通关）；3：全过且计分点首答大多也对。 */
+   * 0：未过半；1：过半但未全过；2：全部最终通过（通关）；
+   * 3：通关且首答正确率达到 THREE_STAR_RATE（80%），或计分点首答大多正确（旧口径保留）。 */
   const PASS_STARS = 2;
+  /** 三星所需的首次作答正确率 */
+  const THREE_STAR_RATE = 0.8;
+
+  /* 首答正确率：按每个证据点首答里的判断题项统计，没有明细时退化为“按证据点” */
+  function firstCheckRate(list, gradedIds) {
+    let ok = 0, total = 0;
+    for (const p of list) {
+      if (!gradedIds.has(p.id)) continue;
+      const ev = p.firstEvidence;
+      const bools = ev && typeof ev === 'object' ? Object.values(ev).filter(v => typeof v === 'boolean') : [];
+      if (bools.length) { total += bools.length; ok += bools.filter(Boolean).length; }
+      else { total += 1; if (p.firstOk) ok += 1; }
+    }
+    return total ? ok / total : 0;
+  }
   function starGlyphs(n) {
     const s = Math.max(0, Math.min(3, Number(n) || 0));
     return '★'.repeat(s) + '☆'.repeat(3 - s);
@@ -526,17 +542,20 @@
     const firstOkCount = list.filter(p => p.firstOk && gradedIds.has(p.id)).length;
     const gradedCount = graded.length;
     const finalRatio = total ? done / total : 0;
+    const checkRate = firstCheckRate(list, gradedIds);
     let stars = 0;
     if (finalRatio >= 0.5) stars = 1;
     if (total > 0 && done === total) stars = 2;
     if (stars === 2) {
       if (gradedCount === 0) stars = 3;
-      else if (firstOkCount >= Math.ceil(gradedCount * 2 / 3)) stars = 3;
+      // 首答正确率 ≥80% 即可三星；同时保留“计分点首答大多正确”的旧口径，只会更宽松
+      else if (checkRate + 1e-9 >= THREE_STAR_RATE || firstOkCount >= Math.ceil(gradedCount * 2 / 3)) stars = 3;
     }
     return {
       stars,
       cleared: stars >= PASS_STARS,
       finalRatio,
+      checkRate,
       firstOkCount,
       gradedCount,
       partsDone: done,
@@ -554,6 +573,7 @@
       return {
         id: p.id, attempts: x.attempts || 0, hintMax: x.hintMax || 0,
         firstOk: !!(x.first && x.first.assessment && x.first.assessment.ok),
+        firstEvidence: (x.first && x.first.assessment && x.first.assessment.evidence) || null,
         lastOk: !!(x.last && x.last.assessment && x.last.assessment.ok),
         firstTags: (x.first && x.first.assessment && x.first.assessment.tags) || [],
         lastTags: (x.last && x.last.assessment && x.last.assessment.tags) || [],
@@ -568,6 +588,7 @@
       awarded: !!awarded,
       pass: list.every(p => p.lastOk),
       stars: star.stars,
+      checkRate: star.checkRate,
       cleared: star.cleared,
       starGlyphs: starGlyphs(star.stars),
       missing: star.missing,
@@ -591,6 +612,6 @@
     problems, formulaChoices, verbs, objectChoices, methodsFor, rowText,
     runSteps, runOnce, expected, tempChainKey, tempOps, runOps, flawedFlow, faultNames,
     seedFlowBoxes, shapeNames, signinTable, ruleValue, assessPart, supportFor, stageSummary,
-    PASS_STARS, starGlyphs, computeStars
+    PASS_STARS, THREE_STAR_RATE, starGlyphs, computeStars
   };
 });

@@ -146,4 +146,39 @@ describe('星级与通关门禁', () => {
     const sum = R.stageSummary('formula', st, true);
     assert.equal(sum.stars, 3); assert.equal(sum.cleared, true); assert.equal(sum.visits, 2);
   });
+
+  it('三星门槛：首答正确率达到 80% 即可，不再要求整点全对', () => {
+    assert.equal(R.THREE_STAR_RATE, 0.8);
+    const ev = o => ({ assessment: { ok: false, tags: [], evidence: o } });
+    // 三个证据点首答都判为“未通过”，但细项 8/10 正确 = 80%
+    const nearMiss = { parts: {
+      chain: { first: ev({ a: true, b: true, c: true, d: true }), last: pass, attempts: 2 },
+      order: { first: ev({ a: true, b: true, c: false, d: false }), last: pass, attempts: 2 },
+      steps: { first: ev({ a: true, b: true }), last: pass, attempts: 2 }
+    } };
+    const s = R.stageSummary('temp', nearMiss, false);
+    assert.equal(s.checkRate, 0.8);
+    assert.equal(s.stars, 3, '正确率 80% 应给三星');
+    assert.equal(s.cleared, true);
+
+    // 只有 7/10 = 70%，退回两星
+    const lower = { parts: {
+      chain: { first: ev({ a: true, b: true, c: true, d: false }), last: pass, attempts: 2 },
+      order: { first: ev({ a: true, b: true, c: false, d: false }), last: pass, attempts: 2 },
+      steps: { first: ev({ a: true, b: true }), last: pass, attempts: 2 }
+    } };
+    const s2 = R.stageSummary('temp', lower, false);
+    assert.equal(s2.checkRate, 0.7);
+    assert.equal(s2.stars, 2, '不足 80% 仍是两星');
+    assert.equal(s2.cleared, true, '两星依然通关');
+  });
+
+  it('旧口径保留：计分点首答大多正确也给三星，只宽松不收紧', () => {
+    const allFirst = { parts: {
+      chain: { first: pass, last: pass, attempts: 1 },
+      order: { first: pass, last: pass, attempts: 1 },
+      steps: { first: pass, last: pass, attempts: 1 }
+    } };
+    assert.equal(R.stageSummary('temp', allFirst, false).stars, 3);
+  });
 });
