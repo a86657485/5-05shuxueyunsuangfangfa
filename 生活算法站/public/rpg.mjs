@@ -181,7 +181,13 @@ export const places = {
   quiz:    { tx: 13, ty: 15, name: '出门条',     label: '课堂检测', npc: 'sign' },
 };
 
-export const CHARACTERS = { maleAdventurer: '男生角色', femaleAdventurer: '女生角色' };
+export const CHARACTERS = {
+  maleAdventurer: '男生角色', femaleAdventurer: '女生角色',
+  maleWeather: '气象观测员（男）', femaleWeather: '气象观测员（女）',
+  maleFlow: '流程设计师（男）', femaleFlow: '流程设计师（女）',
+  maleSeeds: '实验小助手（男）', femaleSeeds: '实验小助手（女）',
+  maleSignin: '阅读领读员（男）', femaleSignin: '阅读领读员（女）'
+};
 export function pickCharacter(id) {
   try { const saved = localStorage.getItem('g5l5-character'); if (CHARACTERS[saved]) return saved; } catch {}
   let h = 0; for (const ch of String(id || '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0;

@@ -12,6 +12,7 @@ import { TEST_ANSWERS } from './answers.mjs';
 import { openReward } from './reward.mjs';
 import { UNLOCK_SCORE } from './reward-rules.mjs';
 import { openLearning } from './learning.mjs';
+import { openSkinPicker, starSnapshot, newlyUnlocked, loadRemembered, rememberFromState } from './skins.mjs';
 import { mountQuestion, answerComplete } from './quiz-ui.mjs';
 import { openMemoryReward } from './memory-reward.mjs';
 
@@ -100,6 +101,7 @@ function submitPart(record) {
   const pt = curPart().id;
   const assessment = R.assessPart(stage, pt, record);
   const payload = { sid: state.student.id, round: state.round, stage, part: pt, eventId: uid(), hintLevel, record };
+  const starsBefore = starSnapshot(state);
   const run = eventSequence.then(async () => {
   const sameIdentity = () => state?.student.id === payload.sid && state?.round === payload.round;
   const switched = () => ({ ok: false, saveFailed: true, feedback: '学生或课堂轮次已切换，请在当前课堂重新检查。', evidence: {}, tags: [] });
@@ -127,6 +129,16 @@ function submitPart(record) {
     }
   }
   renderHud();
+  // 解锁过的装扮记住，换轮次不收回
+  rememberFromState(state.student, state);
+  // 刚好凑满三星：解锁一套新装扮
+  const fresh = newlyUnlocked(starsBefore, state);
+  if (fresh.length) {
+    try { localStorage.setItem('g5l5-skin-new', '1'); } catch {}
+    $('hud-avatar')?.classList.add('new-skin');
+    sound.play('star');
+    toast(`三星达成！解锁新装扮：${fresh.join('、')}　点头像更换`);
+  }
   return assessment;
   });
   eventSequence = run.catch(() => {});
@@ -160,6 +172,12 @@ function renderHud() {
   const rb = $('reward-btn');
   if (rb) rb.hidden = !rewardReady();
   $('hud-avatar-img').src = sprite(character, 'idle');
+  const avatarBtn = $('hud-avatar');
+  if (avatarBtn) {
+    let pending = false;
+    try { pending = localStorage.getItem('g5l5-skin-new') === '1'; } catch {}
+    avatarBtn.classList.toggle('new-skin', pending);
+  }
   $('hud-progress').innerHTML = PLACE_ORDER.map(id => {
     const done = id === 'quiz' ? (state.quizAttempts || []).length : awarded(id);
     const here = (screen === 'level' && stage === id) || (screen === 'quiz' && id === 'quiz');
@@ -1048,14 +1066,24 @@ $('switch').onclick = async () => {
 };
 $('fresh').onclick = () => { if (screen === 'level') startPart(); };
 $('hud-avatar').onclick = () => {
-  const keys = Object.keys(CHARACTERS);
-  character = keys[(keys.indexOf(character) + 1) % keys.length];
-  try { localStorage.setItem('g5l5-character', character); } catch {}
-  renderHud();
-  if (screen === 'map') {
-    if (rpg && rpg.setCharacter) rpg.setCharacter(character);
-    else renderMap();
-  }
+  try { localStorage.removeItem('g5l5-skin-new'); } catch {}
+  $('hud-avatar').classList.remove('new-skin');
+  openSkinPicker({
+    state,
+    current: character,
+    remembered: loadRemembered(state?.student),
+    onPick: id => {
+      if (!CHARACTERS[id]) return;
+      character = id;
+      try { localStorage.setItem('g5l5-character', id); } catch {}
+      renderHud();
+      if (screen === 'map') {
+        if (rpg && rpg.setCharacter) rpg.setCharacter(character);
+        else renderMap();
+      }
+      sound.play('good');
+    }
+  });
 };
 $('test-quiz').onclick = () => { show('quiz'); exam = null; quizResult = null; quizAnswers = {}; renderQuiz(); };
 $('test-answer').onclick = () => { $('test-answer-text').textContent = screen === 'level' ? (TEST_ANSWERS[stage + '.' + curPart()?.id] || '') : '进入某一站后可看本步参考答案'; };

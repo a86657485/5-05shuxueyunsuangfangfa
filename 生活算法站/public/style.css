@@ -504,6 +504,28 @@ a.cta{background:linear-gradient(180deg,#ffe28f,#ffc94a)!important;color:#1c2a3a
 .memory-wrap{width:100%;box-sizing:border-box;max-width:1050px;margin:0 auto;padding:28px 24px 50px}.memory-wrap h1{font-size:32px;color:#17493b}.memory-wrap>p{font-size:19px;line-height:1.6}.memory-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.memory-card{min-height:120px;border:3px solid #3e7863;border-radius:8px;background:#d8edce;color:#23473b;font-size:24px;font-weight:700;padding:14px;box-shadow:3px 3px 0 #93b798;cursor:pointer}.memory-card.selected{background:#fff7d5;border-color:#b58a25}.memory-card.match{background:#ebf6e8;color:#2e654a;border-color:#8fb9a0;box-shadow:none}.memory-card:disabled{opacity:1}.memory-status{min-height:3.3em;background:#fffdf2;padding:14px;border-left:5px solid #5c906c}.memory-actions{margin:18px 0}.reward-choices{display:flex;gap:16px;flex-wrap:wrap;margin:24px 0}.reward-choices button{min-height:70px;font-size:21px}
 @media(max-width:700px){.learning-dialog{width:calc(100vw - 16px);max-height:calc(100dvh - 16px)}.learning-head{padding:14px;align-items:flex-start;flex-wrap:wrap}.learning-head h2{font-size:22px}.learning-grid{grid-template-columns:1fr;padding:14px;gap:20px}.learning-copy{font-size:18px}.learning-actions{padding:12px 14px}.learning-actions .go-btn{width:100%}.quiz-pair{gap:8px}.quiz-pair .opt{font-size:16px;padding:10px 6px}.quiz-order li{flex-wrap:wrap}.quiz-order li span{flex-basis:100%}.memory-wrap{padding:18px 12px}.memory-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.memory-card{min-height:100px;font-size:18px;padding:8px}}
 @media(prefers-reduced-motion:reduce){.learning-dialog,.memory-card{animation:none;transition:none}}
+/* 换装面板 */
+.hud-avatar.new-skin{box-shadow:0 0 0 3px var(--amber);animation:skinPulse 1.4s ease-in-out infinite}
+@keyframes skinPulse{50%{box-shadow:0 0 0 5px rgba(255,176,32,.45)}}
+.skin-dialog{width:min(860px,calc(100vw - 28px));max-height:calc(100dvh - 40px);border:2px solid var(--line);border-radius:18px;padding:0;background:#fffdf6;color:var(--text);overflow:auto}
+.skin-dialog::backdrop{background:rgba(10,26,36,.55)}
+.skin-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;background:#fffdf6;border-bottom:2px solid #d6e4cf}
+.skin-head h2{margin:0;font-size:22px}
+.skin-hint{margin:12px 18px 4px;font-size:14px;color:var(--muted)}
+.skin-group{margin:14px 18px 8px;font-size:15px;color:var(--mint)}
+.skin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px;padding:0 18px 6px}
+.skin-card{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;background:#fff;border:2px solid var(--line);border-radius:14px;min-height:0}
+.skin-card img{width:72px;height:96px;object-fit:contain}
+.skin-card b{font-size:13px;font-weight:700;line-height:1.2;text-align:center}
+.skin-card small{font-size:11px;color:var(--muted)}
+.skin-card.current{border-color:var(--mint);background:#e8f7f2;box-shadow:0 0 0 2px rgba(42,157,143,.25) inset}
+.skin-card.current small{color:var(--green)}
+.skin-card.locked{cursor:not-allowed;background:#f3f6f8}
+.skin-card.locked img{filter:grayscale(1) opacity(.45)}
+.skin-card.locked b{color:#9fb0bd}
+.skin-card.locked small{color:#b0894a}
+@media(max-width:520px){.skin-grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr))}.skin-card img{width:58px;height:78px}}
+
 /* 讲解窗口：逐字出现的打字机光标 */
 .typing::after{content:"▍";margin-left:1px;opacity:.5;animation:typecaret 1s steps(1) infinite}
 @keyframes typecaret{50%{opacity:0}}
