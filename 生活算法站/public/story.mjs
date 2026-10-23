@@ -157,7 +157,10 @@ export function openStory(chapter, { student, round, once = false } = {}) {
   const entry = STORY[chapter];
   if (!entry || typeof document === 'undefined') return Promise.resolve();
   const key = storySessionKey(student, round, chapter);
-  if (once && hasSeen(key)) return Promise.resolve();
+  const seenBefore = hasSeen(key);
+  if (once && seenBefore) return Promise.resolve();
+  // 已经看过的剧情：直接全文显示，不再打字、也不再锁 5 秒
+  const fresh = !seenBefore;
   if (!dialog) createDialog();
   let resolve;
   const promise = new Promise(done => { resolve = done; });
@@ -171,8 +174,8 @@ export function openStory(chapter, { student, round, once = false } = {}) {
   const paragraphs = [...text.children];
   const taskEl = dialog.querySelector('.story-task');
   const taskText = '本次任务：' + entry.task;
-  if (canAnimate()) {
-    // 逐段打字，任务句在正文讲完后出现
+  if (canAnimate() && fresh) {
+    // 首次：逐段打字，任务句在正文讲完后出现
     taskEl.textContent = '';
     typeLines(paragraphs.map((p, i) => [p, lines[i]]), { cps: CPS_STORY }).then(() => { taskEl.textContent = taskText; });
   } else {
@@ -186,8 +189,8 @@ export function openStory(chapter, { student, round, once = false } = {}) {
   image.src = entry.image;
   const next = dialog.querySelector('.story-continue');
   next.textContent = entry.action;
-  // 讲解窗口至少停留 5 秒：期间「跳过剧情」和继续按钮都不可用
-  holdButtons([dialog.querySelector('.story-skip'), next], dwellFor(paragraphs.map((p, i) => [p, lines[i]]), { cps: CPS_STORY }), { countdown: next });
+  // 首次观看至少停留 5 秒：期间「跳过剧情」和继续按钮都不可用；重看立即可关
+  if (fresh) holdButtons([dialog.querySelector('.story-skip'), next], dwellFor(paragraphs.map((p, i) => [p, lines[i]]), { cps: CPS_STORY }), { countdown: next });
   document.body.classList.add('story-open');
   try {
     dialog.showModal();

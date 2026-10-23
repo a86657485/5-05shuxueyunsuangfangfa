@@ -106,7 +106,11 @@ export function openLearning(stage, { student, round, once = false } = {}) {
  const card = CARDS[stage];
  if (!card || active) return active || Promise.resolve();
  const key = learningKey(student,round,stage);
- try { if (once && (viewed.has(key) || localStorage.getItem(key))) return Promise.resolve(); } catch {}
+ let seenBefore = viewed.has(key);
+ try { if (localStorage.getItem(key)) seenBefore = true; } catch {}
+ if (once && seenBefore) return Promise.resolve();
+ // 已经看过的先学卡：直接全文显示，不再打字、也不再锁 5 秒
+ const fresh = !seenBefore;
  const trigger = document.activeElement;
  const dialog = document.createElement('dialog');
  dialog.className='learning-dialog'; dialog.setAttribute('aria-labelledby','learning-title');
@@ -129,15 +133,15 @@ export function openLearning(stage, { student, round, once = false } = {}) {
  copy.append(exampleHead,steps,nextNote);
  body.append(figure,copy);const foot=make('footer','','learning-actions'),go=make('button','开始探究','go-btn');go.type='button';go.onclick=()=>dialog.close();foot.append(go);dialog.append(head,body,foot);
  document.body.append(dialog);
- // 要点逐条打字，例子在要点讲完后才出现
- if (canAnimate()) {
+ // 首次：要点逐条打字，例子在要点讲完后才出现；重看直接全文
+ if (canAnimate() && fresh) {
    exampleHead.hidden=steps.hidden=nextNote.hidden=true;
    typeLines(items.map((li,i)=>[li,card.explain[i]]),{cps:CPS_CARD}).then(()=>{exampleHead.hidden=steps.hidden=nextNote.hidden=false;});
  } else {
    items.forEach((li,i)=>{li.textContent=card.explain[i];});
  }
- // 讲解窗口至少停留 5 秒：关闭与「开始探究」在此期间不可用
- holdButtons([close,go],dwellFor(items.map((li,i)=>[li,card.explain[i]]),{cps:CPS_CARD}),{countdown:go});
+ // 首次查看至少停留 5 秒；重看立即可关
+ if (fresh) holdButtons([close,go],dwellFor(items.map((li,i)=>[li,card.explain[i]]),{cps:CPS_CARD}),{countdown:go});
  active=new Promise(resolve=>{dialog.addEventListener('close',()=>{viewed.add(key);try{localStorage.setItem(key,'seen');}catch{} dialog.remove();active=null;if(trigger?.isConnected) trigger.focus();resolve();},{once:true});});
  ['keydown','keyup'].forEach(type=>dialog.addEventListener(type,e=>e.stopPropagation()));
  // 保护期内不允许按 ESC 提前关闭
