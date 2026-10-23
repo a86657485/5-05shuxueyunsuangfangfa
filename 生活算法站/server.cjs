@@ -97,7 +97,10 @@ function createService(options = {}) {
       const fallback = Date.parse(data.updated);
       data.learningDay = firstTimes.length ? dayOf(new Date(Math.min(...firstTimes))) : Number.isFinite(fallback) ? dayOf(new Date(fallback)) : 'unknown';
     }
-    data.lessonExpired = !!data.learningDay && data.learningDay !== lessonDay();
+    // 曾经按“自然日”判定过期：昨天做过一步，今天就锁死，学生必须先请老师开新一轮
+// 才能继续，非常容易卡住课堂。轮次（round）才是“新一轮”的唯一依据——同一轮次内
+// 跨天继续学习是正常需求，因此这里不再按日期作废记录。
+data.lessonExpired = false;
     const list = examsOf(s, round);
     // Historical awards never substitute for the latest saved work. Opening is permanent for this lesson.
     if (!data.lessonExpired && !examClosed(s, round) && !list.some(isCurrentExam) && rules.requiredIds.every(k => rules.stageSummary(k, data.records[k], false).pass) && !list.some(e => e.lessonDay && e.lessonDay !== lessonDay())) list.unshift(newExam(s, round, 'base'));

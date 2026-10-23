@@ -178,7 +178,7 @@ test('legacy recovery, event identity/part/round isolation and teacher class con
   assert.equal(fixture.prepare('SELECT json FROM exams WHERE id=?').get(legacyExam.id).json, JSON.stringify(legacyExam));
 });
 
-test('未开考的昨日学习也只读保留，不能跨日补站或自动开考，新轮次可正常学习', async t => {
+test('昨日学习可跨日继续补站，未满四站不自动开考，新轮次回到空白', async t => {
   const runtimeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'g5-learning-day-'));
   let date = new Date('2026-10-21T01:00:00Z');
   const sid = 'day-student', svc = createService({ runtimeDir, roster: [{ id: sid, classId: '501', name: '课日样例' }], now: () => date });
@@ -203,18 +203,23 @@ test('未开考的昨日学习也只读保留，不能跨日补站或自动开�
   delete old.learningDay;
   old.updated = '2026-10-22T00:00:00Z';
   fixture.prepare('UPDATE states SET json=? WHERE sid=? AND round=?').run(JSON.stringify(old), sid, identity.round);
-  const saved = fixture.prepare('SELECT json FROM states WHERE sid=? AND round=?').get(sid, identity.round).json;
   date = new Date('2026-10-22T01:00:00Z');
-  const expired = (await request('/api/me')).data;
-  assert.equal(expired.lessonExpired, true);
-  assert.equal(expired.learningDay, '2026-10-21');
-  assert.equal(expired.currentExam, undefined);
-  const attempt = await request('/api/event', { ...identity, stage: 'temp', part: 'chain', eventId: 'today-new-attempt', record });
-  assert.equal(attempt.status, 409); assert.match(attempt.data.error, /新一轮/);
-  assert.equal((await request('/api/visit', { ...identity, stage: 'temp' })).status, 409);
-  assert.equal((await request('/api/exam/create', identity)).status, 409);
+  // 同一轮次跨天不再判定过期：学生第二天回来可以继续做
+  const continued = (await request('/api/me')).data;
+  assert.equal(continued.lessonExpired, false);
+  assert.equal(continued.learningDay, '2026-10-21', '仍记录第一次学习日');
+  assert.equal(continued.currentExam, undefined);
+  assert.ok(continued.records.temp.parts.chain, '昨天的记录保留');
+  const attempt = await request('/api/event', {
+    ...identity, stage: 'temp', part: 'order', eventId: 'today-order',
+    record: { ops: ['sub32', 'mul5', 'div9'], reason: 'order', tries: [['sub32', 'mul5', 'div9']] }
+  });
+  assert.equal(attempt.status, 200, '跨日应能继续作答');
+  assert.ok(attempt.data.records.temp.parts.order, '新作答被记录');
+  assert.ok(attempt.data.records.temp.parts.chain, '旧作答不丢');
+  assert.equal((await request('/api/visit', { ...identity, stage: 'temp' })).status, 200, '跨日应能进站');
+  // 没有完成四个必做站，不会自动开考
   assert.equal(fixture.prepare('SELECT count(*) AS n FROM exams WHERE sid=?').get(sid).n, 0);
-  assert.equal(fixture.prepare('SELECT json FROM states WHERE sid=? AND round=?').get(sid, identity.round).json, saved);
   const next = (await request('/api/teacher/new-round', { classId: '501' })).data.round;
   const fresh = await request('/api/event', { sid, round: next, stage: 'temp', part: 'chain', eventId: 'today-fresh', record });
   assert.equal(fresh.status, 200); assert.equal(fresh.data.lessonExpired, false); assert.equal(fresh.data.learningDay, '2026-10-22');

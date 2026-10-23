@@ -198,18 +198,19 @@ test('刷新、服务重启与重开本站不恢复额度，老师新轮次才�
   assert.equal(fresh.data.state.magic.used, 1);
 });
 
-test('仅求助也锁定课日，旧课不接受新use或旧use重放且不改保存记录', async t => {
+test('法宝跨天仍可用，同一 eventId 重放不重复计次', async t => {
   const f = await setup(t), who = await f.login();
   assertAction(await f.use(who, 'yesterday'));
-  const saved = f.fixture.prepare('SELECT json FROM states WHERE sid=? AND round=?').get(who.sid, who.round).json;
   f.setDate('2026-10-24T01:00:00Z');
-  for (const eventId of ['today', 'yesterday']) {
-    const expired = await f.use(who, eventId);
-    assert.equal(expired.status, 409);
-    assert.equal(expired.data.action, undefined);
-  }
-  assert.equal(f.fixture.prepare('SELECT json FROM states WHERE sid=? AND round=?').get(who.sid, who.round).json, saved);
-  assert.equal((await f.request('/api/me', undefined, who.cookie)).data.lessonExpired, true);
+  // 同一轮次跨天继续学习：法宝照常可用
+  const today = await f.use(who, 'today');
+  assertAction(today);
+  assert.equal(today.data.state.magic.used, 2);
+  // 旧 eventId 重放：幂等，不额外消耗次数
+  const replay = await f.use(who, 'yesterday');
+  assert.equal(replay.status, 200);
+  assert.equal(replay.data.state.magic.used, 2, '重放不重复计次');
+  assert.equal((await f.request('/api/me', undefined, who.cookie)).data.lessonExpired, false);
 });
 
 test('法宝与作答使用相同eventId互不吞记录，后续真实首答由服务端标法宝来源', async t => {
