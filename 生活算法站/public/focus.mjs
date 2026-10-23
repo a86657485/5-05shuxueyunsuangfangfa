@@ -5,16 +5,17 @@
 let current = null, tipText = '', raf = 0, neutral = false;
 const $ = id => document.getElementById(id);
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-function host(el) {
+function host(el, exact = false) {
+  if (exact) return el;
   // 候选答案只定位整组，不把第一个选项误示为推荐答案。
   if (el?.matches('button.opt')) return el.closest('.q, .ipo-slot, .seg, .shape-pick, .fault-pick, .chips-row, .chips-col') || el.parentElement;
   // 滑块等表单控件不能显示伪元素光圈，把高亮放在它的外框上
   if (el && ['INPUT', 'SELECT'].includes(el.tagName)) return el.closest('.ctl') || el.parentElement;
   return el;
 }
-export function setFocus(el, tip = '') {
-  neutral = !!el?.matches('button.opt');
-  const h = host(el), prev = current;
+export function setFocus(el, tip = '', exact = false) {
+  neutral = !exact && !!el?.matches('button.opt');
+  const h = host(el, exact), prev = current;
   document.querySelectorAll('.cta').forEach(n => { if (neutral || n !== h) n.classList.remove('cta'); });
   current = h && h.isConnected && !h.closest('[hidden]') ? h : null;
   tipText = current ? tip : '';
@@ -27,6 +28,40 @@ export function setFocus(el, tip = '') {
     }
   }
   place();
+}
+/** 只有学生主动使用法宝后，才允许把答案候选本身作为焦点。 */
+export function setExactFocus(el, tip = '') { setFocus(el, tip, true); }
+
+const gateControls = 'button,input,select,textarea,[role="button"]';
+const gatePrior = new WeakMap();
+/** 当前组与此前已填写组可操作；后续组同时关闭鼠标、键盘与 ARIA。 */
+export function applyLinearGate(root, plan, locked = false) {
+  if (!root) return;
+  const controls = [...root.querySelectorAll(gateControls)];
+  const enable = (el, blocked) => {
+    if (!gatePrior.has(el)) gatePrior.set(el, { disabled: !!el.disabled, tab: el.getAttribute('tabindex') });
+    const prior = gatePrior.get(el);
+    if ('disabled' in el) el.disabled = blocked;
+    el.setAttribute('aria-disabled', String(blocked));
+    if (blocked) el.setAttribute('tabindex', '-1');
+    else if (prior.tab == null) el.removeAttribute('tabindex');
+    else el.setAttribute('tabindex', prior.tab);
+    if (blocked) el.dataset.linearLocked = 'true';
+    else delete el.dataset.linearLocked;
+  };
+  for (const el of controls) {
+    const prior = gatePrior.get(el);
+    if (locked) enable(el, true);
+    else if (prior) enable(el, prior.disabled);
+  }
+  let first = plan.findIndex(row => !row.done);
+  if (first < 0) first = plan.length;
+  plan.forEach((row, i) => {
+    for (const group of root.querySelectorAll(row.selector)) {
+      const items = group.matches(gateControls) ? [group] : [...group.querySelectorAll(gateControls)];
+      items.forEach(el => enable(el, locked || i > first));
+    }
+  });
 }
 export function focusTarget() { return current; }
 export function place() {

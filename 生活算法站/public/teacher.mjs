@@ -170,7 +170,7 @@ function row(s) {
     <td>${s.lessonExpired ? '上一课次（只读，请开新一轮）' : started ? (cur ? `${esc(R.stageOf(cur).short)}·${esc(curPart || '')}` : '主线完成') : '未开始'}</td>
     <td>${done}/${R.requiredIds.length}</td>
     <td class="stars-cell">${R.requiredIds.map(id => { const n = starsOf(s, id); return `<span class="sg n${n}" title="${esc(R.stageOf(id).short)}：${n} 星">${R.starGlyphs(n)}</span>`; }).join('')}</td>
-    <td>${graded ? `${firstOk}/${graded}` : '—'}</td><td>${tries || '—'}</td><td>${hint || '—'}</td>
+    <td>${graded ? `${firstOk}/${graded}` : '—'}</td><td>${tries || '—'}</td><td>${hint || '—'}<br><small>法宝 ${esc(s.magic?.used || 0)}/3</small></td>
     <td>${tags.map(t => `<span class="tag">${esc((R.misconceptions[t] || t).slice(0, 12))}</span>`).join('') || '—'}</td>
     <td class="cardtxt">${card ? `<span class="${card.assessment.ok ? 'okt' : 'badt'}">${card.assessment.ok ? '✓' : '✗'}</span> ${esc(cardText)}` : '—'}</td>
     <td class="quiz-tiers">基础 ${scorePair(tierAttempts(s, 'base'))}<br>挑战 ${scorePair(tierAttempts(s, 'challenge'))}<br>旧版 ${scorePair(tierAttempts(s, 'legacy'))}</td>

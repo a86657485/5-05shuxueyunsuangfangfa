@@ -4,7 +4,7 @@
  * 学生的每次“检查/让同桌照着做”都会作为证据提交（首答永久保留、最终答案更新）。
  */
 import { api, queueEvent, flushQueue } from './sync.mjs';
-import { setFocus, spotlight, place as placeCoach } from './focus.mjs';
+import { setFocus, setExactFocus, applyLinearGate, spotlight, place as placeCoach } from './focus.mjs';
 import { sound } from './sfx.mjs';
 import { mapBackground, places, sprite, pickCharacter, guideSvg, CHARACTERS, mountRpg, paintLoginPreview } from './world.mjs';
 import { STORY, openStory } from './story.mjs';
@@ -17,6 +17,7 @@ import { mountQuestion, answerComplete, mountMatchReview } from './quiz-ui.mjs';
 import { openMemoryReward } from './memory-reward.mjs';
 
 const R = globalThis.LessonRules;
+const L = globalThis.LinearGuide;
 const $ = id => document.getElementById(id);
 const mode = location.pathname === '/test' ? 'test' : location.pathname === '/demo' ? 'demo' : 'student';
 const isLocal = mode !== 'student';
@@ -28,6 +29,7 @@ let character = 'maleAdventurer', avatarAt = 'temp';
 let ui = {}, hintLevel = 0, exam = null, quizAnswers = {}, quizResult = null;
 let login = { classId: '', id: '', manual: false }, roster = [];
 let rpg = null;
+let submitting = false, talismanPending = false, draftVersion = 0, talismanFocus = null;
 const showStory = (chapter, once = false) => openStory(chapter, { student: state.student, round: state.round, once });
 
 async function enterCampus() {
@@ -48,6 +50,138 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const wait = ms => new Promise(r => setTimeout(r, reduced() ? 0 : ms));
 const say = (main, sub = '') => { $('say-main').textContent = main; $('say-sub').textContent = sub; $('say-sub').className = ''; };
 function setSync(msg, warn) { const el = $('sync-status'); if (el) { el.textContent = msg || ''; el.classList.toggle('warning', !!warn); } }
+
+/* ---------- 当前操作组与主动法宝 ---------- */
+const guideContext = () => ({ rule: partRecord('signin', 'rule') });
+const inPart = () => screen === 'level' && !!$('body') && !!$('card');
+const partBusy = () => submitting || talismanPending;
+const modalOpen = () => !!document.querySelector('dialog[open]');
+const talismanRemaining = () => Math.max(0, Number(state?.magic?.remaining ?? (3 - (state?.magic?.used || 0))));
+const usedTalismanFor = (st, pt) => (state?.magic?.uses || []).some(use => use.stage === st && use.part === pt);
+function actionableTarget(action) {
+  const selector = action?.target?.selector;
+  if (!selector || !inPart()) return null;
+  const target = $('body').querySelector(selector);
+  if (!target || target.closest('[hidden]') || target.disabled || target.getAttribute('aria-disabled') === 'true') return null;
+  const rect = target.getBoundingClientRect();
+  return rect.width && rect.height ? target : null;
+}
+function currentAction() {
+  if (!inPart() || partBusy() || modalOpen() || state?.lessonExpired || $('next')) return null;
+  const action = L.nextAction(stage, curPart().id, ui, guideContext());
+  return actionableTarget(action) ? action : null;
+}
+function renderTalisman() {
+  const button = $('talisman');
+  if (!button) return;
+  $('talisman-count').textContent = `${talismanRemaining()}/3`;
+  button.disabled = talismanPending || !state || talismanRemaining() <= 0 || !currentAction();
+  button.setAttribute('aria-disabled', String(button.disabled));
+  button.title = isLocal ? '虚构演示：本页共3次，刷新可重演，不写班级记录' : '每人每轮整课共3次，使用后由你完成下一操作';
+}
+function endTalisman(clear = false) {
+  talismanFocus = null;
+  if (clear && $('talisman-panel')) $('talisman-panel').hidden = true;
+}
+function clearDraftFeedback() {
+  draftVersion++;
+  endTalisman(true);
+  const fb = $('fb'); if (fb) { fb.innerHTML = ''; fb.className = 'feedback'; }
+  $('composer')?.querySelectorAll('.bad-row').forEach(row => row.classList.remove('bad-row'));
+  if ($('trace')) $('trace').innerHTML = '';
+  if ($('fixed')) $('fixed').hidden = true;
+}
+function refreshLinear(focus = true) {
+  if (!inPart()) { renderTalisman(); return; }
+  const plan = L.linearPlan(stage, curPart().id, ui, guideContext());
+  applyLinearGate($('body'), plan, partBusy());
+  const add = $('addRow');
+  if (add) {
+    add.disabled = partBusy() || !plan.filter(row => row.key !== 'run').every(row => row.done);
+    add.setAttribute('aria-disabled', String(add.disabled));
+    if (add.disabled) { add.dataset.linearLocked = 'true'; add.setAttribute('tabindex', '-1'); }
+    else { delete add.dataset.linearLocked; add.removeAttribute('tabindex'); }
+  }
+  $('card').setAttribute('aria-busy', String(partBusy()));
+  bindSubmissionActions();
+  if (focus && !partBusy() && !modalOpen() && !$('next')) {
+    const exact = talismanFocus && actionableTarget(talismanFocus);
+    if (exact) setExactFocus(exact, talismanFocus.text);
+    else {
+      const next = plan.find(row => !row.done);
+      const targets = next && [...$('body').querySelectorAll(next.selector)];
+      const target = targets?.find(el => !el.closest('[hidden]') && !el.disabled && el.getAttribute('aria-disabled') !== 'true');
+      if (target) {
+        // 组选择器有时返回一组中的多个数字按钮，普通焦点仍落在整组。
+        const group = target.matches('button.opt') ? target.closest('.seg,.q,.shape-pick,.fault-pick,.chips-row,.chips-col') : target.closest('.stepper') || target;
+        setFocus(group || target, next.text);
+      }
+    }
+  }
+  renderTalisman();
+}
+function bindSubmissionActions() {
+  for (const id of ['check', 'run']) {
+    const button = $(id);
+    if (!button || button._linearSubmit || !button.onclick) continue;
+    const handler = button.onclick;
+    button._linearSubmit = true;
+    button.onclick = async event => {
+      if (partBusy() || button.disabled || button.getAttribute('aria-disabled') === 'true') return;
+      submitting = true; endTalisman(); refreshLinear(false);
+      try { await handler(event); }
+      catch (error) { toast(error.message || '本次操作没有完成，作品仍保留，请再试一次。'); }
+      finally { submitting = false; refreshLinear(false); }
+    };
+  }
+}
+// capture 守卫覆盖鼠标、键盘生成的 click 及脚本 click，避免只变灰却仍进入旧 handler。
+function guardLinear(event) {
+  const target = event.target.closest?.('button,input,select,textarea,[role="button"]');
+  if (!target) return;
+  if (partBusy() && (target.closest('#card') || target.closest('#parts') || target.closest('#hud') || target.closest('#test-tools') || target.id === 'to-map')) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+  if (!inPart() || !target.closest('#body')) return;
+  if (target.disabled || target.getAttribute('aria-disabled') === 'true' || target.dataset.linearLocked === 'true') { event.preventDefault(); event.stopImmediatePropagation(); return; }
+  if (event.type === 'click' && target.matches('input,select,textarea')) return;
+  if (!['check', 'run'].includes(target.id)) clearDraftFeedback();
+  requestAnimationFrame(() => refreshLinear());
+}
+['click', 'input', 'change'].forEach(type => document.addEventListener(type, guardLinear, true));
+async function useTalisman() {
+  const action = currentAction();
+  if (talismanPending || !action || talismanRemaining() <= 0) return;
+  const ticket = { sid: state.student.id, round: state.round, stage, part: curPart().id, version: draftVersion };
+  const sameIdentity = () => state?.student.id === ticket.sid && state?.round === ticket.round;
+  const stillCurrent = () => sameIdentity() && inPart() && stage === ticket.stage && curPart().id === ticket.part && draftVersion === ticket.version;
+  talismanPending = true; refreshLinear(false);
+  try {
+    let granted;
+    if (isLocal) {
+      const used = (state.magic?.used || 0) + 1;
+      state.magic = { limit: 3, used, remaining: 3 - used };
+      granted = action;
+    } else {
+      const result = await api('/api/talisman/use', { method: 'POST', body: { sid: ticket.sid, round: ticket.round, eventId: uid(), stage: ticket.stage, part: ticket.part, draft: structuredClone(ui) } });
+      if (!sameIdentity()) return;
+      if (result.state?.magic) state.magic = result.state.magic;
+      granted = result.action;
+    }
+    if (!stillCurrent()) return;
+    talismanPending = false; refreshLinear(false);
+    hintLevel = 3;
+    const partState = currentPartState();
+    partState.hintMax = Math.max(partState.hintMax || 0, 3);
+    $('talisman-panel').hidden = false;
+    $('talisman-action').textContent = granted?.text || '当前操作已变化，请按普通引导继续。';
+    $('talisman-explanation').textContent = granted?.explanation || '';
+    $('talisman-status').textContent = isLocal ? '虚构演示 · 刷新可重演 · 不写入班级记录' : `本轮还可用 ${talismanRemaining()} 次；请你亲自完成操作。`;
+    const target = actionableTarget(granted);
+    if (target && !modalOpen() && !submitting) { talismanFocus = granted; setExactFocus(target, granted.text); sound.play('hint'); }
+  } catch (error) {
+    if (sameIdentity() && error.data?.state?.magic) state.magic = error.data.state.magic;
+    if (stillCurrent()) toast(error.status ? `法宝未使用：${error.message}` : '网络暂不可用，未显示法宝帮助；恢复网络后再试。');
+  } finally { talismanPending = false; refreshLinear(false); }
+}
 
 /* ---------- 证据状态 ---------- */
 const awarded = id => (state?.awards || []).some(a => a.stage === id);
@@ -80,7 +214,7 @@ function applyLocal(p, assessment) {
   const rec = state.records[p.stage] ||= { parts: {}, history: [] };
   rec.parts ||= {}; rec.history ||= [];
   if (rec.history.some(e => e.eventId === p.eventId)) return;
-  const entry = { eventId: p.eventId, part: p.part, record: p.record, assessment, hintLevel: p.hintLevel, created: new Date().toISOString() };
+  const entry = { eventId: p.eventId, part: p.part, record: p.record, assessment, hintLevel: p.hintLevel, created: new Date().toISOString(), ...(usedTalismanFor(p.stage, p.part) ? { helpSources: ['talisman'] } : {}) };
   const part = rec.parts[p.part] ||= { first: null, last: null, attempts: 0, hintMax: 0 };
   if (!part.first) part.first = entry;
   let prior = Number.isFinite(part.errorStreak) ? part.errorStreak : 0;
@@ -148,6 +282,7 @@ function submitPart(record) {
 /* ---------- 屏幕与 HUD ---------- */
 function show(id) {
   screen = id;
+  if (id !== 'level') endTalisman(true);
   for (const s of ['login', 'map', 'level', 'quiz-page', 'reward']) { const el = $(s); if (el) el.hidden = s !== (id === 'quiz' ? 'quiz-page' : id); }
   $('hud').hidden = id === 'login';
   $('menu').hidden = true;
@@ -192,6 +327,7 @@ function renderHud() {
   $('sound').textContent = sound.on ? '🔊' : '🔇';
   if (mode === 'test') { $('test-tools').hidden = false; document.body.classList.add('with-tools'); }
   updateLeaveButton();
+  renderTalisman();
 }
 function updateLeaveButton() {
   const btn = $('to-map');
@@ -324,6 +460,7 @@ async function bumpVisit(id) {
   }
 }
 async function enterPlace(id) {
+  if (partBusy()) return;
   // walkthrough / 无障碍备用入口
   if (state?.lessonExpired) return toast('这份学习记录属于上一课次，请老师为本班开启新一轮。');
   if (!unlocked(id)) return toast(id === 'quiz' ? '完成四个必做站后，基础检测会开放；老师关闭检测时请等待老师安排。' : '请先完成上一站');
@@ -342,7 +479,8 @@ async function enterPlace(id) {
   await openLearning(stage, {student:state.student,round:state.round,once:true});
 }
 function startPart(special) {
-  ui = {}; hintLevel = Math.min(3, Number(currentPartState().hintMax) || 0);
+  draftVersion++; endTalisman(true);
+  ui = {}; hintLevel = Math.max(usedTalismanFor(stage, curPart().id) ? 3 : 0, Math.min(3, Number(currentPartState().hintMax) || 0));
   show('level');
   renderLevel(special);
 }
@@ -404,14 +542,16 @@ const targetChips = targets => targets.map(t => `<span class="tchip t-${t}">${es
 /* ---------- 关卡框架 ---------- */
 function renderLevel(special) {
   const meta = R.stageOf(stage), sum = summaryOf(stage);
+  const firstIncomplete = sum.parts.findIndex(p => !p.lastOk);
+  const partAllowed = i => !!sum.parts[i]?.lastOk || i === firstIncomplete;
   $('chapter').textContent = `${places[stage].name} · ${meta.aim} · ${sum.starGlyphs || R.starGlyphs(sum.stars)}`;
   $('stage-title').textContent = meta.name;
   $('parts').innerHTML = meta.parts.map((p, i) => {
     const s = sum.parts[i];
     const now = special !== 'summary' && i === partIdx;
-    return `<li class="step ${now ? 'now' : ''} ${s.lastOk ? 'done' : ''}"><button type="button" data-i="${i}" ${s.lastOk || i <= partIdx || mode === 'test' ? '' : 'disabled'}><i>${s.lastOk ? '✓' : i + 1}</i>${esc(p.name.split('：')[0].split('（')[0])}</button></li>`;
+    return `<li class="step ${now ? 'now' : ''} ${s.lastOk ? 'done' : ''}"><button type="button" data-i="${i}" aria-disabled="${!partAllowed(i)}" ${partAllowed(i) ? '' : 'disabled tabindex="-1"'}><i>${s.lastOk ? '✓' : i + 1}</i>${esc(p.name.split('：')[0].split('（')[0])}</button></li>`;
   }).join('');
-  $('parts').querySelectorAll('button[data-i]').forEach(b => { b.onclick = () => { partIdx = Number(b.dataset.i); startPart(); }; });
+  $('parts').querySelectorAll('button[data-i]').forEach(b => { b.onclick = () => { const i = Number(b.dataset.i); if (partBusy() || !partAllowed(i)) return; partIdx = i; startPart(); }; });
   $('test-answer-text').textContent = '';
   if (special === 'summary') return renderStageSummary();
   const part = curPart(), key = stage + '.' + part.id, info = PARTS[key];
@@ -435,6 +575,7 @@ function renderLevel(special) {
     'signin.rule': partSigninRule, 'signin.steps': () => partSteps('signin'), 'signin.reflect': partReflect,
     'formula.steps': partFormula
   })[key]();
+  refreshLinear();
   renderHud();
 }
 /** 判定后的反馈：失败指向可改处；成功只亮一个要点，并给出唯一的下一步 */
@@ -451,7 +592,7 @@ function feedback(a, retryFocus) {
     fb.innerHTML = `<p>${esc(a.feedback)}</p><p class="keypoint">要点：${esc(info.point)}</p>
       <p class="stars">本站 ${esc(sum.starGlyphs || R.starGlyphs(sum.stars))}（通关 ≥${R.PASS_STARS} 星 · 首答正确率 ${Math.round((sum.checkRate || 0) * 100)}%，≥${Math.round(R.THREE_STAR_RATE * 100)}% 得三星）</p>
       <button type="button" class="go-btn" id="next">${last ? '查看本站结算 →' : '下一步 →'}</button>`;
-    $('next').onclick = () => { if (last) startPart('summary'); else { partIdx++; startPart(); } };
+    $('next').onclick = () => { if (partBusy()) return; if (last) startPart('summary'); else { const sumNow = summaryOf(stage); const i = partIdx + 1; const first = sumNow.parts.findIndex(p => !p.lastOk); if (!sumNow.parts[i]?.lastOk && i !== first) return; partIdx = i; startPart(); } };
     setFocus($('next'), last ? '看看星级与收获' : '进入下一步');
     say('做到了！', sum.cleared ? '已达通关星级' : `再完成剩余证据点，争取 ${R.starGlyphs(R.PASS_STARS)}`);
   } else {
@@ -614,7 +755,7 @@ function partTempOrder() {
     if (d.ops.length < 3) setFocus($('opsPool').querySelector('.op'), `第${d.ops.length + 1}个做什么？`);
     else if (!d.shown) setFocus($('calc'), '算一算');
   };
-  $('opsClear').onclick = () => { d.ops = []; d.shown = false; draw(); };
+  $('opsClear').onclick = () => { d.ops = []; d.shown = false; d.reason = null; $('zhou').hidden = true; $('check').hidden = true; $('why').querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', 'false')); draw(); };
   $('calc').onclick = async () => {
     sound.play('tap'); d.shown = true; d.tries.push(d.ops.slice()); draw();
     const res = R.runOps(d.ops, 50);
@@ -639,7 +780,7 @@ function partTempOrder() {
 function partSteps(pid, opts = {}) {
   const d = ui;
   const p = R.problems[pid];
-  const ctx = pid === 'signin' ? { rule: partRecord('signin', 'rule') || (mode === 'test' ? { a: 3, sign: '-', b: 2 } : null) } : {};
+  const ctx = pid === 'signin' ? { rule: partRecord('signin', 'rule') } : {};
   d.rows ||= Array.from({ length: p.rows }, () => ({ verb: null, obj: null, method: null }));
   d.hand ||= {};
   const handSpec = { seeds: { label: '先自己按步骤算：n = 10 时', fields: [['m', 'm =', '粒'], ['s', 's =', '粒']] }, signin: { label: '先自己算：签到 15 次时', fields: [['p', '积分 =', '分']] } }[pid];
@@ -739,14 +880,16 @@ async function animateRun(pid, rows, ctx) {
 
 /* ---------- 黑板 ① 跟老师画（自查） ---------- */
 function partFlowPaper() {
-  const d = ui; d.checks = [];
+  const d = ui; d.checks = []; d.reviewed = 0;
   const items = [['terminal', '“开始”“结束”画成圆角矩形'], ['io', '“输入华氏温度值”“输出摄氏温度值”画成平行四边形'], ['process', '“计算摄氏温度值”画成直角矩形'], ['line', '用带箭头的流程线，从上到下连起来']];
   $('body').innerHTML = `
     <div class="teacher-note"><b>看黑板</b>老师正在用图框把温度换算的三步拼成流程图。请你在<strong>学习单</strong>上用铅笔同步画。</div>
     <p class="focus-q">画好了吗？对照你的学习单，逐条自查（如实勾选）：</p>
     <div id="checks" class="chips-col"></div>
+    <div class="part-actions"><button type="button" id="paperNext">核对下一条</button><span id="paper-progress" class="note">已核对 0/4 条，可如实勾选或不勾选</span></div>
     <div class="part-actions"><button type="button" class="go-btn" id="check">我画好了，学习单交给老师看</button></div>`;
-  chips($('checks'), items, { multi: true, onChange: v => { d.checks = v; if (v.length === items.length) setFocus($('check'), '提交自查'); } });
+  chips($('checks'), items, { multi: true, onChange: v => { d.checks = v; } });
+  $('paperNext').onclick = () => { d.reviewed = Math.min(items.length, d.reviewed + 1); $('paper-progress').textContent = `已核对 ${d.reviewed}/4 条，可如实勾选或不勾选`; $('paperNext').hidden = d.reviewed >= items.length; };
   $('check').onclick = async () => feedback(await submitPart({ done: true, checks: d.checks }));
   setFocus($('checks').querySelector('.chip'), '对照学习单自查');
   say('跟着老师在学习单上画', '这里只记录你的自查，老师会看你的学习单');
@@ -791,7 +934,7 @@ function seedsSvg() {
   return `<svg viewBox="0 0 246 110" width="246" height="110" aria-label="第1至第6小组种子数示意">${s}</svg>`;
 }
 function partSeedsChain() {
-  const d = ui; d.ask = [];
+  const d = ui; d.ask = []; d.askConfirmed = false;
   $('body').innerHTML = `
     <div class="story-row"><div class="seed-pic">${seedsSvg()}<small>第 1～6 小组的种子数</small></div>
       <p class="story">科学课做发芽实验：第 1 小组分 3 粒、第 2 小组分 5 粒、第 3 小组分 7 粒……按此规律，<b>第 10 小组</b>分多少粒？老师<b>一共</b>分发了多少粒？<br>
@@ -800,18 +943,20 @@ function partSeedsChain() {
       <p>把这一堆种子（像梯形）复制一份倒过来，和原来的拼在一起，就成了每行都一样多的平行四边形：每行 (3+m) 粒，共 n 行。总数是它的一半：s = n×(3+m)÷2。</p></details>
     <p class="focus-q">根据题目分析所求、已知和怎么求，需要时可以重看学习资料或点“?”：</p>
     <div class="qgrid">
-      <div class="q"><b>所求（可多选）</b><div id="qAsk" class="chips-row"></div></div>
+      <div class="q"><b>所求（可多选）</b><div id="qAsk" class="chips-row"></div><button type="button" id="askConfirm">所求选好了</button></div>
       <div class="q"><b>已知</b><div id="qKnown" class="chips-row"></div></div>
       <div class="q"><b>怎么求</b><div id="qHow" class="chips-col"></div></div>
     </div>
     <div class="part-actions"><button type="button" class="go-btn" id="check" hidden>检查</button></div>`;
   const step = () => {
     if (!d.ask.length) return setFocus($('qAsk').querySelector('.chip'), '要求出什么？');
+    if (!d.askConfirmed) return setFocus($('askConfirm'), '所求选好了');
     if (!d.known) return setFocus($('qKnown').querySelector('.chip'), '知道什么？');
     if (!d.how) return setFocus($('qHow').querySelector('.chip'), '怎么求？');
     $('check').hidden = false; setFocus($('check'), '检查');
   };
-  chips($('qAsk'), shuffle([['m10', '第 10 小组的种子数'], ['sum', '一共分发的种子数'], ['g1', '第 1 小组的种子数']]), { multi: true, onChange: v => { d.ask = v; step(); } });
+  chips($('qAsk'), shuffle([['m10', '第 10 小组的种子数'], ['sum', '一共分发的种子数'], ['g1', '第 1 小组的种子数']]), { multi: true, onChange: v => { d.ask = v; d.askConfirmed = false; step(); } });
+  $('askConfirm').onclick = () => { d.askConfirmed = true; step(); };
   chips($('qKnown'), shuffle([['n-rule', '组数 n=10，每组比前一组多 2 粒'], ['answer', '答案 21 粒和 120 粒'], ['none', '什么也不知道']]), { onChange: v => { d.known = v; step(); } });
   chips($('qHow'), shuffle([['m-then-s', '先用 m=n×2+1 算第 10 组，再用 s=n×(3+m)÷2 算总数'], ['s-then-m', '先用 s 的公式算总数，再算第 10 组'], ['guess', '估一个差不多的数']]), { onChange: v => { d.how = v; step(); } });
   $('check').onclick = async () => feedback(await submitPart({ ask: d.ask, known: d.known, how: d.how }), $('qAsk').querySelector('.chip'));
@@ -842,7 +987,7 @@ function partSeedsFlow() {
 
 /* ---------- 阅读小站 ① 找规律并举例验证 ---------- */
 function partSigninRule() {
-  const d = ui; const prev = partRecord('signin', 'rule');
+  const d = ui; const prev = partRecord('signin', 'rule'); d.aChanged = false; d.bChanged = false; d.signTouched = false;
   d.a = prev?.a ?? 1; d.sign = prev?.sign ?? '+'; d.b = prev?.b ?? 0; d.checked = null;
   $('body').innerHTML = `
     <p class="story">学校阅读小站推出活动：阅读签到能得积分，积分可以换购图书。签到 1 次得 1 分，2 次共 4 分，3 次共 7 分，4 次共 10 分……<b>签到 15 次</b>能得多少分？</p>
@@ -852,8 +997,10 @@ function partSigninRule() {
       <div class="rule-build">
         <div class="formula">积分 =
           <span class="stepper"><button type="button" class="mini-btn" data-k="a" data-d="-1">−</button><b id="va"></b><button type="button" class="mini-btn" data-k="a" data-d="1">＋</button></span>
+          <button type="button" class="mini-btn" id="aConfirm">这个数调好了</button>
           × 签到次数
           <button type="button" class="opt chip" id="sign"></button>
+          <button type="button" class="mini-btn" id="signConfirm">符号选好了</button>
           <span class="stepper"><button type="button" class="mini-btn" data-k="b" data-d="-1">−</button><b id="vb"></b><button type="button" class="mini-btn" data-k="b" data-d="1">＋</button></span>
         </div>
         <button type="button" class="go-btn" id="check">举例验证</button>
@@ -863,8 +1010,10 @@ function partSigninRule() {
     $('va').textContent = d.a; $('vb').textContent = d.b; $('sign').textContent = d.sign === '+' ? '＋' : '−';
     $('tb').innerHTML = R.signinTable.map(([k, p], i) => `<tr><td>${k}</td><td>${p}</td><td>${d.checked ? `${R.ruleValue(d.checked, k)} ${d.checkRes[i] ? '✓' : '✗'}` : '—'}</td></tr>`).join('') + '<tr class="muted"><td>15</td><td>？</td><td></td></tr>';
   };
-  $('body').querySelectorAll('.stepper .mini-btn').forEach(b => { b.onclick = () => { const k = b.dataset.k; d[k] = Math.max(0, Math.min(10, d[k] + Number(b.dataset.d))); d.checked = null; draw(); setFocus($('check'), '举例验证'); }; });
-  $('sign').onclick = () => { d.sign = d.sign === '+' ? '-' : '+'; d.checked = null; draw(); setFocus($('check'), '举例验证'); };
+  $('body').querySelectorAll('.stepper .mini-btn').forEach(b => { b.onclick = () => { const k = b.dataset.k, before = d[k]; d[k] = Math.max(0, Math.min(10, d[k] + Number(b.dataset.d))); if (d[k] !== before && k === 'a') d.aChanged = true; if (d[k] !== before && k === 'b') d.bChanged = true; if (k === 'a') d.aConfirmed = false; if (k === 'b') d.checked = null; draw(); }; });
+  $('aConfirm').onclick = () => { d.aConfirmed = true; };
+  $('sign').onclick = () => { d.sign = d.sign === '+' ? '-' : '+'; d.signTouched = true; d.signConfirmed = false; d.checked = null; draw(); };
+  $('signConfirm').onclick = () => { d.signConfirmed = true; };
   $('check').onclick = async () => {
     const rule = { a: d.a, sign: d.sign, b: d.b };
     d.checked = rule; d.checkRes = R.signinTable.map(([k, p]) => R.ruleValue(rule, k) === p); draw();
@@ -887,6 +1036,7 @@ function partReflect() {
   const step = () => { if (!d.was) return setFocus($('was').querySelector('.chip'), '原来'); if (!d.now) return setFocus($('now').querySelector('.chip'), '现在'); $('check').hidden = false; setFocus($('check'), '提交'); };
   chips($('was'), [['answer', '算法就是最后算出来的答案'], ['order', '只要公式对，步骤顺序无所谓'], ['vague', '步骤写个大概就行'], ['shape', '流程图随便画个框就行'], ['knew', '这些我原来就明白']], { onChange: v => { d.was = v; step(); } });
   chips($('now'), [['method', '算法是一步步怎么算的方法，换个数也能用'], ['order', '计算的顺序会影响结果，先后要正确'], ['clear', '每一步要写清做什么、用哪个数、怎么算'], ['flow', '流程图用对图框、连好流程线，顺序一目了然']], { onChange: v => { d.now = v; step(); } });
+  $('free').oninput = () => { d.text = $('free').value.trim().slice(0, 40); };
   $('check').onclick = async () => feedback(await submitPart({ was: d.was, now: d.now, text: $('free').value.trim().slice(0, 40) }));
   step();
   say('写出门条', '没有对错，如实选');
@@ -1045,6 +1195,10 @@ async function enterReward(){
 }
 
 /* ---------- HUD 事件 ---------- */
+$('talisman').onclick = useTalisman;
+new MutationObserver(records => {
+  if (records.some(record => record.type === 'attributes' || [...record.addedNodes, ...record.removedNodes].some(node => node.nodeType === 1 && (node.matches('dialog') || node.querySelector?.('dialog'))))) refreshLinear();
+}).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] });
 $('to-map').onclick = () => { tryLeaveToMap(); };
 $('menu-btn').onclick = () => { $('menu').hidden = !$('menu').hidden; };
 $('reward-btn').onclick = () => { enterReward(); };

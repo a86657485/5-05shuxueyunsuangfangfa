@@ -57,6 +57,14 @@ button.cta{background:linear-gradient(180deg,#ffe28f,#ffc94a)!important;color:#1
 .hud-right{margin-left:auto;display:flex;gap:8px}
 .hud-btn{width:40px;height:40px;min-height:0;padding:0;border-radius:50%;font-size:17px;display:grid;place-items:center}
 .hud-btn.help{font-weight:900;font-size:20px;color:var(--amber);border-color:#7a6a3a}
+.talisman-btn{display:flex;align-items:center;gap:6px;min-height:40px;padding:5px 10px;border:2px solid #b17b13;background:#fff8df;color:#614300;font-size:14px;font-weight:700;white-space:nowrap}
+.talisman-btn b{font-variant-numeric:tabular-nums}
+.talisman-panel{flex:none;margin:0 0 12px;padding:10px 14px;background:#fff8df;border:2px solid #b17b13;border-radius:12px;color:#4b390c;font-size:15px;line-height:1.5}
+.talisman-panel p{margin:3px 0}.talisman-panel small{display:block;color:#66552d}
+[data-linear-locked=true]{cursor:not-allowed}
+.part-body [aria-disabled=true]:not(button):not(input){opacity:.42}
+.part-body .cta{scroll-margin-top:100px;scroll-margin-bottom:90px}
+@media (max-width:460px){.hud{gap:3px}.hud-avatar{width:32px}.hud-right{gap:3px}.hud-right .hud-btn{width:32px;height:32px;flex:none}.hud-right .talisman-btn{font-size:12px;padding:3px 4px;gap:3px}.hud-stars{font-size:12px}}
 .menu{position:absolute;right:14px;top:calc(var(--hud) - 2px);background:#fff;border:1px solid var(--line);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:6px;min-width:190px;box-shadow:0 12px 30px rgba(0,0,0,.15)}
 .menu button{text-align:left}
 .test-tools{position:fixed;left:0;right:0;top:var(--hud);height:var(--tools);z-index:39;display:flex;gap:8px;align-items:center;padding:0 12px;background:#3a2e10;color:#ffe9b0;font-size:13px;overflow-x:auto;white-space:nowrap}
@@ -304,6 +312,7 @@ button.cta{background:linear-gradient(180deg,#ffe28f,#ffc94a)!important;color:#1
   body.game{overflow:auto}
   :root{--hud:48px}
   .hud{gap:6px;padding:0 6px}.hud-id,.hud-sync{display:none}.hud-progress li{width:22px;height:22px;font-size:11px}.hud-btn{width:36px;height:36px}
+  .hud-progress{display:none}.hud-right{gap:5px}.talisman-btn{min-height:36px;padding:3px 7px;font-size:13px}.hud-avatar{flex:none}.hud-stars{margin-right:auto}.talisman-panel{font-size:14px;padding:9px 11px}
   .login-screen{justify-content:center;padding:10px;align-items:flex-start;overflow:auto}
   .login-card{max-height:none;padding:16px}.login-card h1{font-size:24px}.class-tiles{grid-template-columns:repeat(3,1fr)}
   .screen{overflow:auto}

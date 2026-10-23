@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/story.css" />
   <link rel="stylesheet" href="/reward.css" />
   <script src="/rules.js" defer></script>
+  <script src="/linear-guide.js" defer></script>
   <script type="module" src="/app.mjs"></script>
 </head>
 <body class="game">
@@ -19,6 +20,7 @@
   <b id="hud-stars" class="hud-stars" title="星级">☆☆☆</b>
   <small id="sync-status" class="hud-sync" role="status"></small>
   <span class="hud-right">
+    <button id="talisman" class="talisman-btn" type="button" aria-describedby="talisman-status" disabled>通关法宝 <b id="talisman-count">3/3</b></button>
     <button id="story-replay" class="hud-btn" type="button" aria-label="重看任务剧情" title="重看任务剧情">▤</button>
     <button id="sound" class="hud-btn" type="button" aria-label="音效（默认关闭）">🔇</button>
     <button id="help" class="hud-btn help" type="button" aria-label="帮助">?</button>
@@ -66,6 +68,7 @@
     <ol id="parts" class="steps" aria-label="本站证据点"></ol>
   </div>
   <div id="level-main" class="level-main">
+    <aside id="talisman-panel" class="talisman-panel" role="status" hidden><b>下一步怎么点</b><p id="talisman-action"></p><p id="talisman-explanation"></p><small id="talisman-status"></small></aside>
     <div id="scene" class="scene"></div>
   </div>
   <div class="guide-bar">

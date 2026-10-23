@@ -46,6 +46,7 @@ function createService(options = {}) {
     CREATE TABLE IF NOT EXISTS states(sid TEXT NOT NULL, round TEXT NOT NULL, json TEXT NOT NULL, PRIMARY KEY(sid, round));
     CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY, role TEXT NOT NULL, sid TEXT, expires INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS events(id TEXT NOT NULL, sid TEXT NOT NULL, round TEXT NOT NULL, PRIMARY KEY(id, sid, round));
+    CREATE TABLE IF NOT EXISTS talisman_events(id TEXT NOT NULL, sid TEXT NOT NULL, round TEXT NOT NULL, json TEXT NOT NULL, PRIMARY KEY(id, sid, round));
     CREATE TABLE IF NOT EXISTS exams(id TEXT PRIMARY KEY, sid TEXT NOT NULL, round TEXT NOT NULL, json TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS exam_controls(classId TEXT NOT NULL, round TEXT NOT NULL, lessonDay TEXT NOT NULL, closed INTEGER NOT NULL, PRIMARY KEY(classId, round, lessonDay));`);
   const rosterIds = new Set();
@@ -87,6 +88,8 @@ function createService(options = {}) {
     const row = db.prepare('SELECT json FROM states WHERE sid=? AND round=?').get(s.id, round);
     const data = row ? JSON.parse(row.json) : initial(s, round);
     data.student = s;
+    const uses = Array.isArray(data.magic?.uses) ? data.magic.uses : [];
+    data.magic = { limit: 3, used: uses.length, remaining: Math.max(0, 3 - uses.length), uses };
     for (const k of stages) data.records[k] ||= emptyStage();
     const learnedParts = Object.values(data.records).flatMap(st => Object.values(st.parts || {})).filter(part => part.first || part.last);
     if (!data.learningDay && learnedParts.length) {
@@ -165,7 +168,7 @@ function createService(options = {}) {
           st.summary = rules.stageSummary(k, st, (current.awards || []).some(a => a.stage === k));
           if (!full) {
             // 大屏只需要每个证据点的首答/最终答案与判定；历史只保留时间与对错
-            for (const part of Object.values(st.parts || {})) for (const f of ['first', 'last']) if (part[f]) part[f] = { record: part[f].record, assessment: { ok: part[f].assessment.ok, tags: part[f].assessment.tags }, created: part[f].created, hintLevel: part[f].hintLevel };
+            for (const part of Object.values(st.parts || {})) for (const f of ['first', 'last']) if (part[f]) part[f] = { record: part[f].record, assessment: { ok: part[f].assessment.ok, tags: part[f].assessment.tags }, created: part[f].created, hintLevel: part[f].hintLevel, ...(part[f].helpSources ? { helpSources: part[f].helpSources } : {}) };
             st.history = (st.history || []).map(h => ({ part: h.part, created: h.created, ok: !!h.ok }));
           }
         }
@@ -174,6 +177,56 @@ function createService(options = {}) {
         return current;
       });
     return { classId, at: now(), round, lessonDay: lessonDay(), examClosed: examClosed({ classId }, round), students };
+  }
+
+  const talismanUses = (data, stage, part) => data.magic.uses.filter(use => use.stage === stage && use.part === part).length;
+  function handleTalisman(req, body) {
+    const s = matchIdentity(req, body);
+    const meta = rules.stageOf(body.stage);
+    if (!meta) fail(400, '未知关卡');
+    if (!rules.partOf(body.stage, body.part)) fail(400, '未知证据点');
+    if (typeof body.eventId !== 'string' || !body.eventId.trim() || body.eventId.length > 120) fail(400, '缺少有效记录标识');
+    const draft = body.draft;
+    if (!draft || typeof draft !== 'object' || Array.isArray(draft)) fail(400, '缺少当前作品');
+    if (draft.rows !== undefined && (!Array.isArray(draft.rows) || draft.rows.length > 8)) fail(400, '步骤格式不正确');
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const data = state(s);
+      if (data.lessonExpired) fail(409, expiredMessage);
+      const prior = db.prepare('SELECT json FROM talisman_events WHERE id=? AND sid=? AND round=?').get(body.eventId, s.id, data.round);
+      if (prior) {
+        const use = JSON.parse(prior.json);
+        db.exec('COMMIT');
+        return { state: data, remaining: data.magic.remaining, action: use.action, use };
+      }
+      const required = rules.requiredIds;
+      const prev = meta.optional ? required[required.length - 1] : required[required.indexOf(body.stage) - 1];
+      if (prev && !data.awards.some(a => a.stage === prev)) fail(409, '请先完成上一站');
+      const st = data.records[body.stage], current = st.parts?.[body.part];
+      const partIndex = meta.parts.findIndex(part => part.id === body.part);
+      if (!current?.last?.assessment?.ok && !meta.parts.slice(0, partIndex).every(part => st.parts?.[part.id]?.last?.assessment?.ok)) fail(409, '请先完成本站前一步');
+      if (draft.busy || draft.submitting || draft.summary) fail(409, '当前没有可操作的下一步');
+      if (!data.magic.remaining) fail(409, '本轮三次通关法宝已用完');
+      const verifiedRule = data.records.signin.parts?.rule?.last;
+      const ctx = { rule: verifiedRule?.assessment?.ok ? verifiedRule.record : null };
+      const action = require('./public/linear-guide.js').nextAction(body.stage, body.part, draft, ctx);
+      if (!action?.target?.selector) fail(409, '当前没有可操作的下一步');
+      const created = now();
+      const use = { eventId: body.eventId, stage: body.stage, part: body.part, created, action };
+      data.magic.uses.push(use);
+      data.magic.used = data.magic.uses.length;
+      data.magic.remaining = Math.max(0, data.magic.limit - data.magic.used);
+      data.learningDay ||= lessonDay();
+      st.parts ||= {};
+      const part = st.parts[body.part] ||= { first: null, last: null, attempts: 0, hintMax: 0 };
+      part.talismanUses = talismanUses(data, body.stage, body.part);
+      part.hintMax = 3;
+      st.summary = rules.stageSummary(body.stage, st, data.awards.some(a => a.stage === body.stage));
+      save(data);
+      db.prepare('INSERT INTO talisman_events VALUES(?,?,?,?)').run(body.eventId, s.id, data.round, JSON.stringify(use));
+      db.exec('COMMIT');
+      return { state: data, remaining: data.magic.remaining, action, use };
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
   }
 
   function handleEvent(req, body) {
@@ -204,9 +257,11 @@ function createService(options = {}) {
       for (let i = history.length - 1; i >= 0 && !history[i].ok; i--) part.errorStreak++;
       if (!history.length && part.last?.assessment?.ok === false) part.errorStreak = 1;
     }
-    const hintLevel = Math.max(Math.min(3, part.errorStreak), Math.max(0, Math.min(3, Number(body.hintLevel) || 0)));
+    const magicHelp = talismanUses(data, body.stage, body.part);
+    const hintLevel = Math.max(magicHelp ? 3 : 0, Math.min(3, part.errorStreak), Math.max(0, Math.min(3, Number(body.hintLevel) || 0)));
     const created = now();
-    const entry = { record: r, assessment, hintLevel, created, eventId: body.eventId };
+    const entry = { record: r, assessment, hintLevel, created, eventId: body.eventId, ...(magicHelp ? { helpSources: ['talisman'] } : {}) };
+    if (magicHelp) part.talismanUses = magicHelp;
     part.errorStreak = assessment.ok ? 0 : part.errorStreak + 1;
     if (!part.first) part.first = entry; // 首答：该证据点第一次提交，永不覆盖
     part.last = entry;                    // 最终：最近一次提交
@@ -288,6 +343,7 @@ function createService(options = {}) {
         return json(res, 200, data);
       }
       if (p === '/api/event' && req.method === 'POST') return json(res, 200, handleEvent(req, body));
+      if (p === '/api/talisman/use' && req.method === 'POST') return json(res, 200, handleTalisman(req, body));
       if (p === '/api/reward/status' && req.method === 'GET') {
         const s = signedStudent(req), status = state(s).examStatus;
         return json(res, 200, { ...status, unlocked: status.rewardUnlocked });
